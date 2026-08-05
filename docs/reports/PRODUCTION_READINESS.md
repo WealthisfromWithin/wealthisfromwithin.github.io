@@ -40,3 +40,12 @@
 | Docs / ops | 5 | 3 | 4 |
 
 Still demo-local; private data, API sync, and Content OS absorption remain ahead.
+
+
+---
+
+## Wave 2 update (Architect)
+
+**Score: 42 / 100** (was 32 after Wave 1)
+
+Attention loop is real: Inbox, Approvals, Health, Brief. Still local-demo; CRM/Content/API ahead.
