@@ -21,7 +21,7 @@ import {
 import { relativeTime } from '@/lib/clock';
 import { cn } from '@/lib/cn';
 import { DemoBadge, EmptyLine, Panel, SectionLabel, StatePill } from '@/ui/primitives';
-import { integrationStateMeta } from '@/integrations/state';
+import { effectiveIntegrationState, integrationStateMeta } from '@/integrations/state';
 import {
   contentFormatLabel,
   contentItemLinks,
@@ -92,16 +92,19 @@ function PublishingPanel({ item }: { item: ContentItem }) {
   const { dataset } = useSovereign();
   const integrationId = item.platform ? platformIntegrationId[item.platform] : undefined;
   const integration = dataset.integrations.find((row) => row.id === integrationId);
+  // The effective state, so this panel cannot print a green Connected for a row
+  // the registry counts as awaiting credentials.
+  const state = integration ? effectiveIntegrationState(integration) : undefined;
 
   return (
     <Panel title="Publishing">
       <p className="text-sm leading-6 text-muted">
         {item.platform === undefined
           ? 'No platform is recorded on this item.'
-          : integration === undefined
+          : integration === undefined || state === undefined
             ? `${contentPlatformLabel[item.platform]} has no connector in the integration registry, so publishing is manual.`
-            : `${integration.name} is ${integrationStateMeta[integration.state].label}. ${
-                integration.state === 'connected'
+            : `${integration.name} is ${integrationStateMeta[state].label}. ${
+                state === 'connected'
                   ? 'Even so, this surface holds no publishing credential.'
                   : 'Nothing can be sent from here.'
               }`}

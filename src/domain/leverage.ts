@@ -9,6 +9,7 @@ import type {
   Task,
 } from './entities';
 import type { Decision, MemoryEntry, ResearchItem } from './cognition';
+import { effectiveIntegrationState, isUsable } from './integrations';
 
 /**
  * Wave 6 domain: the leverage fabric.
@@ -339,7 +340,7 @@ export function evaluateAutomation(
 
     case 'integration_credential_gap':
       return context.integrations
-        .filter((integration) => integration.state === 'awaiting_credentials')
+        .filter((integration) => effectiveIntegrationState(integration) === 'awaiting_credentials')
         .map((integration) => ({
           id: integration.id,
           label: integration.name,
@@ -389,12 +390,19 @@ export function automationReadiness(
     };
   }
 
-  if (rule.requiresIntegrationId !== undefined && integration?.state !== 'connected') {
+  // `isUsable`, not the stored state: a row claiming Connected with no probe
+  // behind it has unverified credentials, and this is the gate that decides
+  // whether a rule may write. Reading the raw field here would let a
+  // hand-edited store make a rule runnable that `/integrations` shows as
+  // Awaiting Credentials.
+  if (rule.requiresIntegrationId !== undefined && (integration === undefined || !isUsable(integration))) {
     return {
       runnable: false,
       reason: 'awaiting_credentials',
       statement: `Needs ${integration?.name ?? rule.requiresIntegrationId}, which is ${
-        integration === undefined ? 'not in the registry' : integration.state.replace('_', ' ')
+        integration === undefined
+          ? 'not in the registry'
+          : effectiveIntegrationState(integration).replace('_', ' ')
       }. Nothing is sent there.`,
     };
   }

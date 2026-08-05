@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useSovereign } from '@/app/context';
+import type { Integration } from '@/domain';
 import {
+  effectiveIntegrationState,
   INTEGRATION_STATES,
   integrationCategoryLabel,
   integrationStateMeta,
@@ -16,6 +18,27 @@ const statusTone = {
   degraded: 'text-gold',
   offline: 'text-faint',
 } as const;
+
+/**
+ * One substrate dependency, pilled by its *effective* state. The counts above
+ * this list already apply the connected-probe invariant, so a pill reading the
+ * stored field would let one page contradict itself.
+ */
+function SubstrateRow({ integration }: { integration: Integration }) {
+  const meta = integrationStateMeta[effectiveIntegrationState(integration)];
+
+  return (
+    <li className="flex items-start gap-3 border-b border-line/60 py-2 last:border-b-0">
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm text-ivory">{integration.name}</span>
+        <span className="mt-0.5 block text-xs leading-5 text-muted">{integration.rationale}</span>
+      </span>
+      <StatePill tone={meta.tone} title={meta.description}>
+        {meta.label}
+      </StatePill>
+    </li>
+  );
+}
 
 export function HealthPage() {
   const { dataset, ready } = useSovereign();
@@ -78,23 +101,7 @@ export function HealthPage() {
             ) : (
               <ul>
                 {report.substrateMembers.map((integration) => (
-                  <li
-                    key={integration.id}
-                    className="flex items-start gap-3 border-b border-line/60 py-2 last:border-b-0"
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm text-ivory">{integration.name}</span>
-                      <span className="mt-0.5 block text-xs leading-5 text-muted">
-                        {integration.rationale}
-                      </span>
-                    </span>
-                    <StatePill
-                      tone={integrationStateMeta[integration.state].tone}
-                      title={integrationStateMeta[integration.state].description}
-                    >
-                      {integrationStateMeta[integration.state].label}
-                    </StatePill>
-                  </li>
+                  <SubstrateRow key={integration.id} integration={integration} />
                 ))}
               </ul>
             )}

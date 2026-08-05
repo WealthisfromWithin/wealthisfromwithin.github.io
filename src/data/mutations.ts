@@ -9,6 +9,7 @@ import {
   canTransitionMission,
   checkContent,
   contentComplianceInputs,
+  effectiveIntegrationState,
   evaluateAutomation,
   missionNeedsReason,
   type ActivityEvent,
@@ -2621,7 +2622,7 @@ export async function recordIntegrationProbe(
     if (!integration) {
       return { ok: false, reason: 'No integration with that id is in the local registry.' };
     }
-    if (integration.state === 'disabled') {
+    if (effectiveIntegrationState(integration) === 'disabled') {
       return {
         ok: false,
         reason: `${integration.name} is disabled deliberately. Turn it on in the registry before probing it.`,
