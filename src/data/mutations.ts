@@ -77,30 +77,88 @@ function decisionEvent(approval: Approval, status: ApprovalStatus, now: Date): A
 }
 
 /**
- * Moves a gate between open, cleared, and refused, and records the decision as
- * an activity event so the Brief and the Health log show it happened.
+ * What a queue decision did. A content gate runs the content workflow, which can
+ * refuse — blocking copy, or a move the status machine does not allow — so the
+ * decision reports why nothing happened rather than returning a bare `false`.
  */
-export async function decideApproval(
-  id: string,
-  status: ApprovalStatus,
-  database: SovereignDb = db,
-  now: Date = new Date(),
-): Promise<boolean> {
-  return database.transaction('rw', [database.approvals, database.events], async () => {
-    const approval = await database.approvals.get(id);
-    if (!approval || approval.status === status) return false;
+export interface ApprovalDecisionResult {
+  ok: boolean;
+  reason?: string;
+  compliance?: ComplianceResult;
+}
 
-    const stamp = now.toISOString();
-    await database.approvals.update(id, {
+const alreadyDecided: Record<ApprovalStatus, string> = {
+  approved: 'Already approved.',
+  rejected: 'Already rejected.',
+  pending: 'Already open.',
+};
+
+/** Writes the gate row and the audit line, skipping a write a content writer already made. */
+async function writeApprovalDecision(
+  approval: Approval,
+  status: ApprovalStatus,
+  database: SovereignDb,
+  now: Date,
+): Promise<void> {
+  const stamp = now.toISOString();
+  const current = await database.approvals.get(approval.id);
+  if (current && current.status !== status) {
+    await database.approvals.update(approval.id, {
       status,
       updatedAt: stamp,
       touchedAt: stamp,
       decidedAt: status === 'pending' ? undefined : stamp,
       decidedBy: status === 'pending' ? undefined : OPERATOR,
     });
-    await database.events.put(decisionEvent(approval, status, now));
-    return true;
-  });
+  }
+  await database.events.put(decisionEvent(approval, status, now));
+}
+
+/**
+ * Moves a gate between open, cleared, and refused, and records the decision as
+ * an activity event so the Brief and the Health log show it happened.
+ *
+ * A `content` gate is only half of a content decision: the other half is the
+ * item it guards. Deciding one here runs the same writers the Content OS uses,
+ * so the queue can never report a gate as closed while the copy it holds is
+ * still in review. `override` carries the operator's decision to approve copy
+ * the local compliance check refused, exactly as the package page does.
+ */
+export async function decideApproval(
+  id: string,
+  status: ApprovalStatus,
+  options: { override?: boolean } = {},
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<ApprovalDecisionResult> {
+  return database.transaction(
+    'rw',
+    [database.approvals, database.contentItems, database.notifications, database.events],
+    async () => {
+      const approval = await database.approvals.get(id);
+      if (!approval) return { ok: false, reason: 'No gate with that id is in the local store.' };
+      if (approval.status === status) return { ok: false, reason: alreadyDecided[status] };
+
+      // A content gate with no item behind it is just a gate, and is decided as
+      // one; anything else is decided through the content loop.
+      const item =
+        approval.kind === 'content'
+          ? await database.contentItems.filter((row) => row.approvalId === approval.id).first()
+          : undefined;
+
+      if (item) {
+        const result = await decideContentGate(item, status, options, database, now);
+        // The gate is left untouched on a refusal: a decided gate on an item
+        // that did not move is the disagreement this path exists to prevent.
+        if (!result.ok) return result;
+        await writeApprovalDecision(approval, status, database, now);
+        return { ok: true, compliance: result.compliance };
+      }
+
+      await writeApprovalDecision(approval, status, database, now);
+      return { ok: true };
+    },
+  );
 }
 
 /* ── Wave 3: execution, revenue, and time ───────────────────────────────── */
@@ -313,6 +371,7 @@ export interface ContentMutationResult {
  * is no path to `approved` that does not run `checkContent` first.
  */
 const GUARDED_TRANSITIONS: Partial<Record<ContentStatus, string>> = {
+  in_review: 'Review opens a gate in the Approval Queue. Use submitContentForReview.',
   approved: 'Approval runs the local compliance check. Use approveContentItem.',
   scheduled: 'Scheduling needs a publish date. Use scheduleContentItem.',
   published: 'Publishing is recorded, never performed here. Use recordContentPublished.',
@@ -373,8 +432,8 @@ function refuseMove(item: ContentItem | undefined, status: ContentStatus): strin
 
 /**
  * The plain moves: into drafting, back to the vault, blocked, archived. The
- * three that need more than a status — approve, schedule, publish — have their
- * own writers and are refused here.
+ * four that need more than a status — submit, approve, schedule, publish — have
+ * their own writers and are refused here.
  */
 export async function setContentStatus(
   id: string,
@@ -534,6 +593,82 @@ export async function approveContentItem(
       return { ok: true, compliance };
     },
   );
+}
+
+/**
+ * The paired half of `approveContentItem`: the gate refuses the copy. The item
+ * leaves review for drafting, because refused copy is work to be redone rather
+ * than work that is waiting, and the gate closes as rejected in the same write.
+ */
+export async function rejectContentItem(
+  id: string,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<ContentMutationResult> {
+  return database.transaction(
+    'rw',
+    [database.contentItems, database.approvals, database.events],
+    async () => {
+      const item = await database.contentItems.get(id);
+      if (!item) return { ok: false, reason: 'No content item with that id is in the local store.' };
+      if (item.status !== 'drafting' && !canTransitionContent(item.status, 'drafting')) {
+        return {
+          ok: false,
+          reason: `A ${item.status.replace('_', ' ')} item cannot be returned to drafting, so the gate is left open.`,
+        };
+      }
+
+      const stamp = now.toISOString();
+      if (item.status !== 'drafting') {
+        await database.contentItems.update(id, {
+          status: 'drafting',
+          updatedAt: stamp,
+          touchedAt: stamp,
+          blockedReason: undefined,
+        });
+        await database.events.put(
+          contentEvent(item, 'drafting', 'Refused at the human gate. Returned to drafting.', now),
+        );
+      }
+
+      if (item.approvalId !== undefined) {
+        const approval = await database.approvals.get(item.approvalId);
+        if (approval && approval.status !== 'rejected') {
+          await database.approvals.update(item.approvalId, {
+            status: 'rejected',
+            decidedAt: stamp,
+            decidedBy: OPERATOR,
+            updatedAt: stamp,
+            touchedAt: stamp,
+          });
+        }
+      }
+
+      return { ok: true };
+    },
+  );
+}
+
+/**
+ * The content half of an Approval Queue decision, expressed in the writers the
+ * Content OS itself uses. Reopening submits the item for review again, which is
+ * what an open gate means: the copy is back in front of the operator.
+ */
+async function decideContentGate(
+  item: ContentItem,
+  status: ApprovalStatus,
+  options: { override?: boolean },
+  database: SovereignDb,
+  now: Date,
+): Promise<ContentMutationResult> {
+  if (status === 'approved') {
+    // The item is already through; only the gate is out of step with it.
+    if (item.status === 'approved') return { ok: true };
+    return approveContentItem(item.id, options, database, now);
+  }
+  if (status === 'rejected') return rejectContentItem(item.id, database, now);
+  if (item.status === 'in_review') return { ok: true };
+  return submitContentForReview(item.id, database, now);
 }
 
 /** Puts an approved item on a date. Scheduling writes a date, not a job. */

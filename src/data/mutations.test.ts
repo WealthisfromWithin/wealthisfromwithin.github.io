@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SovereignDb } from './db';
-import { countDemoRows } from './dataset';
+import { countDemoRows, type SovereignDataset } from './dataset';
 import {
   approveContentItem,
   captureContentIdea,
@@ -42,6 +42,7 @@ const OPPORTUNITY = 'opp-truoak';
 const PAST_MEETING = 'mtg-kestrel-checkin';
 const DRAFT_ITEM = 'c-substrate';
 const REVIEW_ITEM = 'c-constraint';
+const CONTENT_GATE = 'apr-linkedin';
 const APPROVED_ITEM = 'c-renewal-proof';
 const SCHEDULED_ITEM = 'c-advisory-loop';
 const VAULT_IDEA = 'idea-leverage-inventory';
@@ -71,7 +72,7 @@ afterEach(async () => {
 
 describe('approval decisions', () => {
   it('persists an approval across a reload', async () => {
-    expect(await decideApproval(PENDING_GATE, 'approved', database)).toBe(true);
+    expect((await decideApproval(PENDING_GATE, 'approved', {}, database)).ok).toBe(true);
 
     const reopened = await reload();
     await ensureSeeded(reopened, new Date());
@@ -83,7 +84,7 @@ describe('approval decisions', () => {
   });
 
   it('persists a rejection across a reload', async () => {
-    await decideApproval(PENDING_GATE, 'rejected', database);
+    await decideApproval(PENDING_GATE, 'rejected', {}, database);
 
     const reopened = await reload();
     const approval = await reopened.approvals.get(PENDING_GATE);
@@ -93,7 +94,7 @@ describe('approval decisions', () => {
 
   it('survives a demo reseed rather than being silently reopened', async () => {
     const now = new Date();
-    await decideApproval(PENDING_GATE, 'approved', database, now);
+    await decideApproval(PENDING_GATE, 'approved', {}, database, now);
 
     await seedDemoData(database, new Date(now.getTime() + DAY_MS));
 
@@ -103,8 +104,8 @@ describe('approval decisions', () => {
   });
 
   it('can be reopened, which clears the decision stamp', async () => {
-    await decideApproval(PENDING_GATE, 'approved', database);
-    expect(await decideApproval(PENDING_GATE, 'pending', database)).toBe(true);
+    await decideApproval(PENDING_GATE, 'approved', {}, database);
+    expect((await decideApproval(PENDING_GATE, 'pending', {}, database)).ok).toBe(true);
 
     const approval = await database.approvals.get(PENDING_GATE);
     expect(approval?.status).toBe('pending');
@@ -112,16 +113,20 @@ describe('approval decisions', () => {
     expect(approval?.decidedBy).toBeUndefined();
   });
 
-  it('reports no change for an unknown id or a repeated decision', async () => {
-    expect(await decideApproval('apr-does-not-exist', 'approved', database)).toBe(false);
+  it('reports no change for an unknown id or a repeated decision, and says why', async () => {
+    const missing = await decideApproval('apr-does-not-exist', 'approved', {}, database);
+    expect(missing.ok).toBe(false);
+    expect(missing.reason).toContain('No gate with that id');
 
-    await decideApproval(PENDING_GATE, 'approved', database);
-    expect(await decideApproval(PENDING_GATE, 'approved', database)).toBe(false);
+    await decideApproval(PENDING_GATE, 'approved', {}, database);
+    const repeated = await decideApproval(PENDING_GATE, 'approved', {}, database);
+    expect(repeated.ok).toBe(false);
+    expect(repeated.reason).toContain('Already approved');
   });
 
   it('records the decision as an activity event with the gate provenance', async () => {
     const before = (await readDataset(database)).events.length;
-    await decideApproval(PENDING_GATE, 'approved', database);
+    await decideApproval(PENDING_GATE, 'approved', {}, database);
 
     const dataset = await readDataset(database);
     const recorded = dataset.events.filter((event) => event.id.startsWith('e-approval-'));
@@ -140,7 +145,7 @@ describe('approval decisions', () => {
         ?.items.some((item) => item.id === `approval:${PENDING_GATE}`),
     ).toBe(true);
 
-    await decideApproval(PENDING_GATE, 'approved', database, now);
+    await decideApproval(PENDING_GATE, 'approved', {}, database, now);
 
     const after = buildMorningBrief(await readDataset(database), now);
     expect(
@@ -154,7 +159,7 @@ describe('approval decisions', () => {
     const dataset = await readDataset(database);
     const pendingBefore = selectApprovals(dataset, 'pending').length;
 
-    await decideApproval(PENDING_GATE, 'approved', database);
+    await decideApproval(PENDING_GATE, 'approved', {}, database);
 
     const after = await readDataset(database);
     expect(selectApprovals(after, 'pending')).toHaveLength(pendingBefore - 1);
@@ -459,12 +464,15 @@ describe('content status machine (W4)', () => {
     const result = await setContentStatus(DRAFT_ITEM, 'archived', {}, database);
     expect(result.ok).toBe(true);
 
-    const backwards = await setContentStatus(DRAFT_ITEM, 'in_review', {}, database);
+    const backwards = await setContentStatus(DRAFT_ITEM, 'blocked', {}, database);
     expect(backwards.ok).toBe(false);
     expect(backwards.reason).toContain('cannot move straight to');
   });
 
-  it('sends the three guarded moves to the writer that can make them', async () => {
+  it('sends the four guarded moves to the writer that can make them', async () => {
+    expect((await setContentStatus(DRAFT_ITEM, 'in_review', {}, database)).reason).toContain(
+      'submitContentForReview',
+    );
     expect((await setContentStatus(REVIEW_ITEM, 'approved', {}, database)).reason).toContain(
       'approveContentItem',
     );
@@ -528,10 +536,16 @@ describe('content review gate (W4)', () => {
     expect(notification?.source).toBe('demo');
   });
 
-  it('refuses to open a gate on an item that is already through it', async () => {
-    const result = await submitContentForReview(APPROVED_ITEM, database);
-    expect(result.ok).toBe(false);
-    expect(result.reason).toContain('cannot move straight to');
+  it('can put approved copy back in front of the gate, but not copy that has shipped', async () => {
+    const again = await submitContentForReview(APPROVED_ITEM, database);
+    expect(again.ok).toBe(true);
+    expect((await database.contentItems.get(APPROVED_ITEM))?.status).toBe('in_review');
+    expect((await database.approvals.get(`apr-content-${APPROVED_ITEM}`))?.status).toBe('pending');
+
+    await recordContentPublished(SCHEDULED_ITEM, database);
+    const shipped = await submitContentForReview(SCHEDULED_ITEM, database);
+    expect(shipped.ok).toBe(false);
+    expect(shipped.reason).toContain('cannot move straight to');
   });
 
   it('persists the gate across a reload and a reseed', async () => {
@@ -594,6 +608,139 @@ describe('content approval runs the local compliance check (W4)', () => {
 
     expect((await setContentStatus(REVIEW_ITEM, 'approved', {}, database)).ok).toBe(false);
     expect((await database.contentItems.get(REVIEW_ITEM))?.status).toBe('in_review');
+  });
+});
+
+describe('a content gate decided in the queue moves the copy with it (W4 M1)', () => {
+  /** True while the Brief still says this item is holding an open gate. */
+  function claimsOpenGate(dataset: SovereignDataset, now: Date): boolean {
+    const attention = buildMorningBrief(dataset, now).sections.find(
+      (section) => section.id === 'attention',
+    );
+    return (
+      attention?.items.some(
+        (item) => item.id === `content:${REVIEW_ITEM}` || item.id === `approval:${CONTENT_GATE}`,
+      ) ?? false
+    );
+  }
+
+  it('starts with the gate and the copy agreeing that a decision is owed', async () => {
+    const now = new Date();
+    expect((await database.approvals.get(CONTENT_GATE))?.kind).toBe('content');
+    expect((await database.contentItems.get(REVIEW_ITEM))?.approvalId).toBe(CONTENT_GATE);
+    expect(claimsOpenGate(await readDataset(database), now)).toBe(true);
+  });
+
+  it('approves the copy, runs the compliance check, and clears the attention row', async () => {
+    const now = new Date();
+    const result = await decideApproval(CONTENT_GATE, 'approved', {}, database, now);
+
+    expect(result.ok).toBe(true);
+    expect(result.compliance?.clean).toBe(true);
+
+    const item = await database.contentItems.get(REVIEW_ITEM);
+    expect(item?.status).toBe('approved');
+    expect(item?.complianceCheckedAt).toBeDefined();
+    expect(item?.complianceSummary).toContain('Local keyword policy');
+
+    const approval = await database.approvals.get(CONTENT_GATE);
+    expect(approval?.status).toBe('approved');
+    expect(approval?.decidedBy).toBe('Operator');
+
+    const dataset = await readDataset(database);
+    expect(dataset.events.some((event) => event.title.startsWith('Approval granted'))).toBe(true);
+    expect(dataset.events.some((event) => event.title.startsWith('Content approved'))).toBe(true);
+    expect(claimsOpenGate(dataset, now)).toBe(false);
+  });
+
+  it('refuses blocking copy and leaves both halves exactly where they were', async () => {
+    await database.contentItems.update(REVIEW_ITEM, {
+      body: 'A risk-free way to double your revenue.',
+    });
+
+    const result = await decideApproval(CONTENT_GATE, 'approved', {}, database);
+
+    expect(result.ok).toBe(false);
+    expect(result.compliance?.blocking).toBe(true);
+    expect((await database.contentItems.get(REVIEW_ITEM))?.status).toBe('in_review');
+    expect((await database.approvals.get(CONTENT_GATE))?.status).toBe('pending');
+  });
+
+  it('records the override on the copy when the queue approves it anyway', async () => {
+    await database.contentItems.update(REVIEW_ITEM, { body: 'A risk-free launch.' });
+
+    const result = await decideApproval(CONTENT_GATE, 'approved', { override: true }, database);
+
+    expect(result.ok).toBe(true);
+    const item = await database.contentItems.get(REVIEW_ITEM);
+    expect(item?.status).toBe('approved');
+    expect(item?.complianceSummary).toContain('operator override');
+    expect((await database.approvals.get(CONTENT_GATE))?.status).toBe('approved');
+  });
+
+  it('takes the copy out of review when the gate refuses it', async () => {
+    const now = new Date();
+    const result = await decideApproval(CONTENT_GATE, 'rejected', {}, database, now);
+
+    expect(result.ok).toBe(true);
+    expect((await database.contentItems.get(REVIEW_ITEM))?.status).toBe('drafting');
+    expect((await database.approvals.get(CONTENT_GATE))?.status).toBe('rejected');
+
+    const dataset = await readDataset(database);
+    expect(
+      dataset.events.find((event) => event.id.startsWith(`e-content-${REVIEW_ITEM}`))?.detail,
+    ).toContain('Refused at the human gate');
+    expect(claimsOpenGate(dataset, now)).toBe(false);
+  });
+
+  it('puts the copy back in front of the operator when the gate is reopened', async () => {
+    const now = new Date();
+    await decideApproval(CONTENT_GATE, 'approved', {}, database, now);
+    const result = await decideApproval(CONTENT_GATE, 'pending', {}, database, now);
+
+    expect(result.ok).toBe(true);
+    expect((await database.contentItems.get(REVIEW_ITEM))?.status).toBe('in_review');
+
+    const approval = await database.approvals.get(CONTENT_GATE);
+    expect(approval?.status).toBe('pending');
+    expect(approval?.decidedAt).toBeUndefined();
+    expect(approval?.decidedBy).toBeUndefined();
+
+    const dataset = await readDataset(database);
+    expect(selectApprovals(dataset, 'pending').map((row) => row.id)).toContain(CONTENT_GATE);
+    expect(claimsOpenGate(dataset, now)).toBe(true);
+  });
+
+  it('refuses a decision the content machine cannot make, rather than deciding half of it', async () => {
+    await approveContentItem(REVIEW_ITEM, {}, database);
+    await recordContentPublished(REVIEW_ITEM, database);
+    await database.approvals.update(CONTENT_GATE, { status: 'pending' });
+
+    const result = await decideApproval(CONTENT_GATE, 'rejected', {}, database);
+
+    expect(result.ok).toBe(false);
+    expect(result.reason).toContain('cannot be returned to drafting');
+    expect((await database.contentItems.get(REVIEW_ITEM))?.status).toBe('published');
+    expect((await database.approvals.get(CONTENT_GATE))?.status).toBe('pending');
+  });
+
+  it('decides a content gate with no item behind it as the plain gate it is', async () => {
+    await database.contentItems.update(REVIEW_ITEM, { approvalId: undefined });
+
+    expect((await decideApproval(CONTENT_GATE, 'approved', {}, database)).ok).toBe(true);
+    expect((await database.approvals.get(CONTENT_GATE))?.status).toBe('approved');
+    expect((await database.contentItems.get(REVIEW_ITEM))?.status).toBe('in_review');
+  });
+
+  it('survives a reload and a reseed with both halves still in step', async () => {
+    const now = new Date();
+    await decideApproval(CONTENT_GATE, 'approved', {}, database, now);
+
+    const reopened = await reload();
+    await seedDemoData(reopened, new Date(now.getTime() + DAY_MS));
+
+    expect((await reopened.contentItems.get(REVIEW_ITEM))?.status).toBe('approved');
+    expect((await reopened.approvals.get(CONTENT_GATE))?.status).toBe('approved');
   });
 });
 
@@ -722,7 +869,7 @@ describe('idea vault writes (W4)', () => {
 
 describe('demo opt-out is still absolute (M1)', () => {
   it('removes rows the operator acted on and keeps them gone across a reload', async () => {
-    await decideApproval(PENDING_GATE, 'approved', database);
+    await decideApproval(PENDING_GATE, 'approved', {}, database);
     await markAllNotificationsRead(database);
     await setTaskStatus(OPEN_TASK, 'done', database);
     await setOpportunityStage(OPPORTUNITY, 'won', database);

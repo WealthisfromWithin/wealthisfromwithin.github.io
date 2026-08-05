@@ -181,13 +181,15 @@ export type ContentStatus = z.infer<typeof contentStatusSchema>;
  * refuses anything not listed here, and the UI only offers what it lists.
  * Nothing reaches `published` except from a state where the copy was approved,
  * and reaching it is always an operator recording a publish — no connector on
- * this surface can confirm that a post went out.
+ * this surface can confirm that a post went out. Approved copy can go back to
+ * `in_review` because a human gate that is reopened must be able to take the
+ * copy back with it; without that move the gate and the item would disagree.
  */
 export const CONTENT_TRANSITIONS: Record<ContentStatus, readonly ContentStatus[]> = {
   idea: ['drafting', 'archived'],
   drafting: ['in_review', 'idea', 'blocked', 'archived'],
   in_review: ['approved', 'drafting', 'blocked', 'archived'],
-  approved: ['scheduled', 'published', 'drafting', 'archived'],
+  approved: ['scheduled', 'published', 'in_review', 'drafting', 'archived'],
   scheduled: ['published', 'approved', 'blocked', 'archived'],
   published: ['archived'],
   blocked: ['drafting', 'archived'],

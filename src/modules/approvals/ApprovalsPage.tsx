@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useSovereign } from '@/app/context';
+import { contentHref } from '@/app/href';
 import { decideApproval } from '@/data/mutations';
 import type { Approval } from '@/domain';
 import { relativeTime } from '@/lib/clock';
@@ -41,14 +42,20 @@ function DecisionLine({ approval, now }: { approval: Approval; now: Date }) {
 
 function ApprovalRow({
   approval,
+  contentItemId,
+  blocked,
   now,
   busy,
   onDecide,
 }: {
   approval: Approval;
+  /** Set when this gate holds a content item, so the copy can be opened and fixed. */
+  contentItemId: string | undefined;
+  /** True when the last approve attempt was refused by the local compliance check. */
+  blocked: boolean;
   now: Date;
   busy: boolean;
-  onDecide: (approval: Approval, status: Approval['status']) => void;
+  onDecide: (approval: Approval, status: Approval['status'], override?: boolean) => void;
 }) {
   const pending = approval.status === 'pending';
 
@@ -77,6 +84,32 @@ function ApprovalRow({
             <span aria-hidden>·</span>
             <DecisionLine approval={approval} now={now} />
           </p>
+          {pending && blocked ? (
+            <p className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-alert">
+              <span>The local keyword policy found blocking language in this copy.</span>
+              {contentItemId ? (
+                <Link
+                  to={contentHref(contentItemId)}
+                  className="label-caps border border-line px-2.5 py-1 text-muted transition-colors hover:border-gold/40 hover:text-ivory"
+                >
+                  Open the package
+                </Link>
+              ) : null}
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  onDecide(approval, 'approved', true);
+                }}
+                className={cn(
+                  actionButton,
+                  'border-alert/50 text-alert hover:border-alert hover:text-ivory',
+                )}
+              >
+                Approve anyway (recorded)
+              </button>
+            </p>
+          ) : null}
         </div>
 
         <div className="flex shrink-0 items-center gap-2 pt-0.5">
@@ -138,21 +171,37 @@ export function ApprovalsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [blocked, setBlocked] = useState<string | null>(null);
   const now = useMemo(() => new Date(), []);
 
   const filter = parseApprovalFilter(searchParams.get('status'));
   const counts = useMemo(() => approvalCounts(dataset), [dataset]);
   const rows = useMemo(() => selectApprovals(dataset, filter), [dataset, filter]);
 
-  function decide(approval: Approval, status: Approval['status']) {
+  // A content gate holds a package, and deciding the gate moves the package with
+  // it. The link lets the operator read and fix the copy the check refused.
+  const contentItemByApproval = useMemo(
+    () =>
+      new Map(
+        dataset.contentItems
+          .filter((item) => item.approvalId !== undefined)
+          .map((item) => [item.approvalId, item.id] as const),
+      ),
+    [dataset],
+  );
+
+  function decide(approval: Approval, status: Approval['status'], override = false) {
     setBusy(true);
     setMessage(null);
-    void decideApproval(approval.id, status)
-      .then((changed) => {
+    void decideApproval(approval.id, status, { override })
+      .then((result) => {
+        setBlocked(result.compliance?.blocking === true && !result.ok ? approval.id : null);
         setMessage(
-          changed
-            ? `${approvalStatusLabel[status]}: ${approval.title}. Recorded in the local store.`
-            : 'Nothing changed.',
+          result.ok
+            ? `${approvalStatusLabel[status]}: ${approval.title}. Recorded in the local store${
+                result.compliance ? `. ${result.compliance.summary}` : ''
+              }`
+            : (result.reason ?? 'Nothing changed.'),
         );
       })
       .catch((cause: unknown) => {
@@ -223,6 +272,8 @@ export function ApprovalsPage() {
             <ApprovalRow
               key={approval.id}
               approval={approval}
+              contentItemId={contentItemByApproval.get(approval.id)}
+              blocked={blocked === approval.id}
               now={now}
               busy={busy}
               onDecide={decide}
