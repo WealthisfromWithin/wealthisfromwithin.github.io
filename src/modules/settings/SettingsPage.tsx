@@ -7,7 +7,7 @@ import { countDemoRows } from '@/data/dataset';
 import { clearDemoData, resetLocalStore, seedDemoData } from '@/data/repositories';
 import { SEED_VERSION } from '@/data/seed';
 import { useDemoOptOut } from '@/data/useDataset';
-import { agentKernel } from '@/agents/kernel';
+import { agentKernel } from '@/agents';
 import { countByState } from '@/integrations/state';
 import { Panel, SectionLabel, StatePill } from '@/ui/primitives';
 
@@ -148,19 +148,26 @@ function CredentialsPanel() {
 }
 
 function KernelPanel() {
-  const providers = agentKernel.providers();
+  const roster = agentKernel.roster();
+  const local = roster.filter((provider) => !provider.external).length;
 
   return (
     <Panel title="Agent kernel">
       <div className="flex items-center gap-3">
-        <StatePill tone={providers.length > 0 ? 'sentinel' : 'muted'}>
-          {providers.length > 0 ? `${String(providers.length)} providers` : 'No provider'}
+        <StatePill tone="muted">
+          {`${String(roster.length)} adapters · ${String(local)} local`}
         </StatePill>
         <p className="text-xs text-muted">
-          Every model call routes through one kernel. Wave 1 ships the interface and an honest stub
-          that refuses rather than fabricates.
+          Every model call routes through one kernel. Adapters refuse rather than fabricate: the
+          hosted ones hold no credentials, and the local one needs an endpoint on this machine.
         </p>
       </div>
+      <Link
+        to="/ai"
+        className="label-caps mt-3 inline-block border border-line px-2.5 py-1 text-muted transition-colors hover:border-gold/40 hover:text-ivory"
+      >
+        Open the AI workspace
+      </Link>
     </Panel>
   );
 }

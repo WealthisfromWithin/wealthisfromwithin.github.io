@@ -1,5 +1,7 @@
 import type {
   ActivityEvent,
+  AgentMessage,
+  AgentSession,
   Approval,
   Campaign,
   Company,
@@ -9,15 +11,21 @@ import type {
   ContentMetric,
   ContentTemplate,
   Cta,
+  Decision,
   Hook,
   Integration,
+  KnowledgeNode,
   LeverageMetric,
   Meeting,
+  MemoryEntry,
   Mission,
   Notification,
   Opportunity,
   Person,
   Project,
+  Prompt,
+  ResearchItem,
+  SovereignDocument,
   Task,
 } from '@/domain';
 
@@ -39,6 +47,14 @@ export interface SovereignDataset {
   hooks: Hook[];
   ctas: Cta[];
   contentMetrics: ContentMetric[];
+  knowledgeNodes: KnowledgeNode[];
+  memoryEntries: MemoryEntry[];
+  documents: SovereignDocument[];
+  decisions: Decision[];
+  prompts: Prompt[];
+  researchItems: ResearchItem[];
+  agentSessions: AgentSession[];
+  agentMessages: AgentMessage[];
   notifications: Notification[];
   events: ActivityEvent[];
   metrics: LeverageMetric[];
@@ -62,6 +78,14 @@ export const DATASET_KEYS = [
   'hooks',
   'ctas',
   'contentMetrics',
+  'knowledgeNodes',
+  'memoryEntries',
+  'documents',
+  'decisions',
+  'prompts',
+  'researchItems',
+  'agentSessions',
+  'agentMessages',
   'notifications',
   'events',
   'metrics',
@@ -85,6 +109,14 @@ export const emptyDataset: SovereignDataset = {
   hooks: [],
   ctas: [],
   contentMetrics: [],
+  knowledgeNodes: [],
+  memoryEntries: [],
+  documents: [],
+  decisions: [],
+  prompts: [],
+  researchItems: [],
+  agentSessions: [],
+  agentMessages: [],
   notifications: [],
   events: [],
   metrics: [],

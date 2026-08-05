@@ -1,6 +1,8 @@
 import Dexie, { type EntityTable } from 'dexie';
 import type {
   ActivityEvent,
+  AgentMessage,
+  AgentSession,
   Approval,
   Campaign,
   Company,
@@ -10,15 +12,21 @@ import type {
   ContentMetric,
   ContentTemplate,
   Cta,
+  Decision,
   Hook,
   Integration,
+  KnowledgeNode,
   LeverageMetric,
   Meeting,
+  MemoryEntry,
   Mission,
   Notification,
   Opportunity,
   Person,
   Project,
+  Prompt,
+  ResearchItem,
+  SovereignDocument,
   Task,
 } from '@/domain';
 
@@ -44,6 +52,14 @@ export class SovereignDb extends Dexie {
   hooks!: EntityTable<Hook, 'id'>;
   ctas!: EntityTable<Cta, 'id'>;
   contentMetrics!: EntityTable<ContentMetric, 'id'>;
+  knowledgeNodes!: EntityTable<KnowledgeNode, 'id'>;
+  memoryEntries!: EntityTable<MemoryEntry, 'id'>;
+  documents!: EntityTable<SovereignDocument, 'id'>;
+  decisions!: EntityTable<Decision, 'id'>;
+  prompts!: EntityTable<Prompt, 'id'>;
+  researchItems!: EntityTable<ResearchItem, 'id'>;
+  agentSessions!: EntityTable<AgentSession, 'id'>;
+  agentMessages!: EntityTable<AgentMessage, 'id'>;
   notifications!: EntityTable<Notification, 'id'>;
   events!: EntityTable<ActivityEvent, 'id'>;
   metrics!: EntityTable<LeverageMetric, 'id'>;
@@ -130,6 +146,21 @@ export class SovereignDb extends Dexie {
             row.tags ??= [];
           });
       });
+
+    // Wave 5 adds cognition: what is known, what must be remembered, what was
+    // decided, what is still being asked, and the local agent transcript. Every
+    // table is new, so there is nothing to migrate — a version-4 store gains
+    // eight empty stores and keeps every row it had.
+    this.version(5).stores({
+      knowledgeNodes: 'id, kind, pinned, companyId, opportunityId, contentItemId, source',
+      memoryEntries: 'id, kind, scope, pinned, reviewAt, personId, companyId, source',
+      documents: 'id, kind, status, companyId, opportunityId, projectId, meetingId, source',
+      decisions: 'id, status, dueAt, decidedAt, opportunityId, projectId, source',
+      prompts: 'id, intent, lastUsedAt, source',
+      researchItems: 'id, status, priority, dueAt, opportunityId, source',
+      agentSessions: 'id, lastActivityAt, promptId, source',
+      agentMessages: 'id, sessionId, at, outcome, source',
+    });
   }
 }
 

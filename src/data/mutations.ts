@@ -1,21 +1,38 @@
 import { db, type SovereignDb } from './db';
 import {
   canTransitionContent,
+  canTransitionDecision,
   checkContent,
   contentComplianceInputs,
   type ActivityEvent,
+  type AgentMessage,
+  type AgentSession,
   type Approval,
   type ApprovalStatus,
   type ComplianceResult,
   type ContentIdea,
   type ContentItem,
   type ContentStatus,
+  type Decision,
+  type DecisionStatus,
+  type KnowledgeKind,
+  type KnowledgeNode,
+  type MemoryConfidence,
+  type MemoryEntry,
+  type MemoryKind,
+  type MemoryScope,
   type Notification,
   type PipelineStage,
   type Priority,
+  type Prompt,
+  type PromptIntent,
+  type ResearchItem,
+  type ResearchStatus,
+  type SovereignDocument,
   type Task,
   type TaskStatus,
 } from '@/domain';
+import type { AgentKernel, AgentRequest, AgentResult } from '@/agents';
 
 /**
  * Wave 2 is the first wave that writes to the local store. Every mutation stamps
@@ -897,6 +914,1023 @@ export async function promoteContentIdea(
       return { idea: { ...idea, status: 'promoted', promotedItemId: item.id }, item };
     },
   );
+}
+
+/* ── Wave 5: cognition ──────────────────────────────────────────────────── */
+
+/**
+ * Operator-authored cognition rows are `local`, never `demo`: a memory the
+ * operator saved is not sample data, and neither a reseed nor the demo opt-out
+ * may remove it.
+ */
+function localId(prefix: string, now: Date): string {
+  return `${prefix}-local-${String(now.getTime())}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function cognitionEvent(
+  record: { id: string; source: ActivityEvent['source'] },
+  prefix: string,
+  title: string,
+  detail: string,
+  now: Date,
+): ActivityEvent {
+  return activityFor(record, prefix, 'cognition', title, detail, now);
+}
+
+function cleanTags(tags: string[] | undefined): string[] {
+  return (tags ?? []).map((tag) => tag.trim()).filter((tag) => tag.length > 0);
+}
+
+export interface NewKnowledgeNode {
+  title: string;
+  kind?: KnowledgeKind;
+  summary?: string;
+  body?: string;
+  tags?: string[];
+  origin?: string;
+  personIds?: string[];
+  companyId?: string;
+  opportunityId?: string;
+  contentItemId?: string;
+  meetingId?: string;
+  documentIds?: string[];
+  relatedNodeIds?: string[];
+}
+
+export async function captureKnowledgeNode(
+  input: NewKnowledgeNode,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<KnowledgeNode | null> {
+  const title = input.title.trim();
+  if (title.length === 0) return null;
+
+  const stamp = now.toISOString();
+  const node: KnowledgeNode = {
+    id: localId('kn', now),
+    source: 'local',
+    createdAt: stamp,
+    updatedAt: stamp,
+    touchedAt: stamp,
+    title,
+    kind: input.kind ?? 'note',
+    summary: input.summary?.trim() ?? '',
+    body: input.body?.trim() ?? '',
+    tags: cleanTags(input.tags),
+    origin: input.origin?.trim() ?? 'Captured in the knowledge base',
+    personIds: input.personIds ?? [],
+    companyId: input.companyId,
+    opportunityId: input.opportunityId,
+    contentItemId: input.contentItemId,
+    meetingId: input.meetingId,
+    documentIds: input.documentIds ?? [],
+    relatedNodeIds: input.relatedNodeIds ?? [],
+    pinned: false,
+  };
+
+  await database.transaction('rw', [database.knowledgeNodes, database.events], async () => {
+    await database.knowledgeNodes.add(node);
+    await database.events.put(
+      cognitionEvent(node, 'knowledge', `Knowledge captured: ${node.title}`, node.summary, now),
+    );
+  });
+
+  return node;
+}
+
+export async function setKnowledgePinned(
+  id: string,
+  pinned: boolean,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const stamp = now.toISOString();
+  const updated = await database.knowledgeNodes.update(id, {
+    pinned,
+    updatedAt: stamp,
+    touchedAt: stamp,
+  });
+  return updated > 0;
+}
+
+/** Records that a human read the node and still stands behind it. */
+export async function reviewKnowledgeNode(
+  id: string,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const stamp = now.toISOString();
+  const updated = await database.knowledgeNodes.update(id, {
+    reviewedAt: stamp,
+    updatedAt: stamp,
+    touchedAt: stamp,
+  });
+  return updated > 0;
+}
+
+/** Archived rather than deleted: knowledge that stopped being useful is still history. */
+export async function archiveKnowledgeNode(
+  id: string,
+  archived: boolean,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const stamp = now.toISOString();
+  const updated = await database.knowledgeNodes.update(id, {
+    archivedAt: archived ? stamp : undefined,
+    pinned: archived ? false : undefined,
+    updatedAt: stamp,
+    touchedAt: stamp,
+  });
+  return updated > 0;
+}
+
+export interface NewMemoryEntry {
+  statement: string;
+  kind?: MemoryKind;
+  scope?: MemoryScope;
+  detail?: string;
+  origin?: string;
+  confidence?: MemoryConfidence;
+  tags?: string[];
+  personId?: string;
+  companyId?: string;
+  decisionId?: string;
+  knowledgeNodeId?: string;
+  pinned?: boolean;
+  reviewAt?: string;
+}
+
+export async function saveMemoryEntry(
+  input: NewMemoryEntry,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<MemoryEntry | null> {
+  const statement = input.statement.trim();
+  if (statement.length === 0) return null;
+
+  const stamp = now.toISOString();
+  const entry: MemoryEntry = {
+    id: localId('mem', now),
+    source: 'local',
+    createdAt: stamp,
+    updatedAt: stamp,
+    touchedAt: stamp,
+    statement,
+    kind: input.kind ?? 'fact',
+    scope: input.scope ?? 'operator',
+    detail: input.detail?.trim() ?? '',
+    origin: input.origin?.trim() ?? 'Saved by the operator',
+    confidence: input.confidence ?? 'stated',
+    tags: cleanTags(input.tags),
+    personId: input.personId,
+    companyId: input.companyId,
+    decisionId: input.decisionId,
+    knowledgeNodeId: input.knowledgeNodeId,
+    pinned: input.pinned ?? false,
+    reviewAt: input.reviewAt,
+    recallCount: 0,
+  };
+
+  await database.transaction('rw', [database.memoryEntries, database.events], async () => {
+    await database.memoryEntries.add(entry);
+    await database.events.put(
+      cognitionEvent(entry, 'memory', `Memory saved: ${entry.statement}`, entry.detail, now),
+    );
+  });
+
+  return entry;
+}
+
+export async function setMemoryPinned(
+  id: string,
+  pinned: boolean,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const stamp = now.toISOString();
+  const updated = await database.memoryEntries.update(id, {
+    pinned,
+    updatedAt: stamp,
+    touchedAt: stamp,
+  });
+  return updated > 0;
+}
+
+/** A recall is a read the store remembers, which is what makes a memory decay measurable. */
+export async function recallMemoryEntry(
+  id: string,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const entry = await database.memoryEntries.get(id);
+  if (!entry) return false;
+
+  const stamp = now.toISOString();
+  const updated = await database.memoryEntries.update(id, {
+    recallCount: entry.recallCount + 1,
+    lastRecalledAt: stamp,
+    updatedAt: stamp,
+    touchedAt: stamp,
+  });
+  return updated > 0;
+}
+
+/**
+ * Re-confirms a memory whose review date passed, pushing the next review out.
+ * Confirming is a recall too: someone read it and said it is still true.
+ */
+export async function confirmMemoryEntry(
+  id: string,
+  reviewInDays = 90,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<boolean> {
+  return database.transaction('rw', [database.memoryEntries, database.events], async () => {
+    const entry = await database.memoryEntries.get(id);
+    if (!entry) return false;
+
+    const stamp = now.toISOString();
+    const next = new Date(now.getTime() + reviewInDays * 86_400_000).toISOString();
+    await database.memoryEntries.update(id, {
+      reviewAt: next,
+      recallCount: entry.recallCount + 1,
+      lastRecalledAt: stamp,
+      updatedAt: stamp,
+      touchedAt: stamp,
+    });
+    await database.events.put(
+      cognitionEvent(
+        entry,
+        'memory',
+        `Memory re-confirmed: ${entry.statement}`,
+        `Next review in ${String(reviewInDays)} days.`,
+        now,
+      ),
+    );
+    return true;
+  });
+}
+
+/** Retired, not deleted: a memory that stopped being true is part of the record. */
+export async function retireMemoryEntry(
+  id: string,
+  retired: boolean,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<boolean> {
+  return database.transaction('rw', [database.memoryEntries, database.events], async () => {
+    const entry = await database.memoryEntries.get(id);
+    if (!entry) return false;
+    if ((entry.retiredAt !== undefined) === retired) return false;
+
+    const stamp = now.toISOString();
+    await database.memoryEntries.update(id, {
+      retiredAt: retired ? stamp : undefined,
+      pinned: retired ? false : entry.pinned,
+      updatedAt: stamp,
+      touchedAt: stamp,
+    });
+    await database.events.put(
+      cognitionEvent(
+        entry,
+        'memory',
+        `${retired ? 'Memory retired' : 'Memory restored'}: ${entry.statement}`,
+        retired ? 'It stays in the record, out of the working set.' : 'Back in the working set.',
+        now,
+      ),
+    );
+    return true;
+  });
+}
+
+export interface NewDocument {
+  title: string;
+  kind?: SovereignDocument['kind'];
+  summary?: string;
+  body?: string;
+  format?: SovereignDocument['format'];
+  tags?: string[];
+  companyId?: string;
+  personId?: string;
+  opportunityId?: string;
+  projectId?: string;
+  meetingId?: string;
+  location?: string;
+}
+
+export async function createDocument(
+  input: NewDocument,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<SovereignDocument | null> {
+  const title = input.title.trim();
+  if (title.length === 0) return null;
+
+  const stamp = now.toISOString();
+  const document: SovereignDocument = {
+    id: localId('doc', now),
+    source: 'local',
+    createdAt: stamp,
+    updatedAt: stamp,
+    touchedAt: stamp,
+    title,
+    kind: input.kind ?? 'memo',
+    status: 'draft',
+    summary: input.summary?.trim() ?? '',
+    body: input.body ?? '',
+    format: input.format ?? 'markdown',
+    author: OPERATOR,
+    tags: cleanTags(input.tags),
+    companyId: input.companyId,
+    personId: input.personId,
+    opportunityId: input.opportunityId,
+    projectId: input.projectId,
+    meetingId: input.meetingId,
+    location: input.location?.trim() ?? '',
+  };
+
+  await database.transaction('rw', [database.documents, database.events], async () => {
+    await database.documents.add(document);
+    await database.events.put(
+      cognitionEvent(
+        document,
+        'document',
+        `Document created: ${document.title}`,
+        document.summary,
+        now,
+      ),
+    );
+  });
+
+  return document;
+}
+
+/**
+ * Documents move draft → final → archived and back to draft. A body is not
+ * edited here; what changes is the claim the surface makes about the document.
+ */
+const DOCUMENT_TRANSITIONS: Record<SovereignDocument['status'], readonly SovereignDocument['status'][]> = {
+  draft: ['final', 'archived'],
+  final: ['draft', 'archived'],
+  archived: ['draft'],
+};
+
+export async function setDocumentStatus(
+  id: string,
+  status: SovereignDocument['status'],
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<ContentMutationResult> {
+  return database.transaction('rw', [database.documents, database.events], async () => {
+    const document = await database.documents.get(id);
+    if (!document) return { ok: false, reason: 'No document with that id is in the local store.' };
+    if (document.status === status) return { ok: false, reason: `Already ${status}.` };
+    if (!DOCUMENT_TRANSITIONS[document.status].includes(status)) {
+      return { ok: false, reason: `A ${document.status} document cannot move to ${status}.` };
+    }
+
+    const stamp = now.toISOString();
+    await database.documents.update(id, {
+      status,
+      reviewedAt: status === 'final' ? stamp : document.reviewedAt,
+      updatedAt: stamp,
+      touchedAt: stamp,
+    });
+    await database.events.put(
+      cognitionEvent(
+        document,
+        'document',
+        `Document marked ${status}: ${document.title}`,
+        `Was ${document.status}.`,
+        now,
+      ),
+    );
+    return { ok: true };
+  });
+}
+
+export interface NewDecision {
+  title: string;
+  context?: string;
+  choice?: string;
+  rationale?: string;
+  alternatives?: string[];
+  consequences?: string;
+  impact?: Decision['impact'];
+  reversible?: boolean;
+  dueAt?: string;
+  tags?: string[];
+  personIds?: string[];
+  companyId?: string;
+  opportunityId?: string;
+  projectId?: string;
+  contentItemId?: string;
+  knowledgeNodeId?: string;
+}
+
+/**
+ * Records a decision. A call with an answer already in it is `decided` on
+ * arrival; one without is `proposed`, and the log shows it as still open.
+ */
+export async function recordDecision(
+  input: NewDecision,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<Decision | null> {
+  const title = input.title.trim();
+  if (title.length === 0) return null;
+
+  const stamp = now.toISOString();
+  const choice = input.choice?.trim() ?? '';
+  const decided = choice.length > 0;
+  const decision: Decision = {
+    id: localId('dec', now),
+    source: 'local',
+    createdAt: stamp,
+    updatedAt: stamp,
+    touchedAt: stamp,
+    title,
+    status: decided ? 'decided' : 'proposed',
+    context: input.context?.trim() ?? '',
+    choice,
+    rationale: input.rationale?.trim() ?? '',
+    alternatives: (input.alternatives ?? []).map((line) => line.trim()).filter((line) => line.length > 0),
+    consequences: input.consequences?.trim() ?? '',
+    impact: input.impact ?? 'info',
+    reversible: input.reversible ?? true,
+    dueAt: input.dueAt,
+    decidedAt: decided ? stamp : undefined,
+    decidedBy: decided ? OPERATOR : undefined,
+    tags: cleanTags(input.tags),
+    personIds: input.personIds ?? [],
+    companyId: input.companyId,
+    opportunityId: input.opportunityId,
+    projectId: input.projectId,
+    contentItemId: input.contentItemId,
+    knowledgeNodeId: input.knowledgeNodeId,
+  };
+
+  await database.transaction('rw', [database.decisions, database.events], async () => {
+    await database.decisions.add(decision);
+    await database.events.put(
+      cognitionEvent(
+        decision,
+        'decision',
+        `${decided ? 'Decision recorded' : 'Decision proposed'}: ${decision.title}`,
+        decided ? decision.choice : decision.context,
+        now,
+      ),
+    );
+  });
+
+  return decision;
+}
+
+/**
+ * Makes the call. A decision cannot become `decided` without the answer and the
+ * reasoning: a log of choices with no rationale is a list, not institutional
+ * memory.
+ */
+export async function decideDecision(
+  id: string,
+  input: { choice: string; rationale?: string; consequences?: string },
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<ContentMutationResult> {
+  const choice = input.choice.trim();
+  if (choice.length === 0) {
+    return { ok: false, reason: 'A decision needs the choice that was made.' };
+  }
+
+  return database.transaction('rw', [database.decisions, database.events], async () => {
+    const decision = await database.decisions.get(id);
+    if (!decision) return { ok: false, reason: 'No decision with that id is in the local store.' };
+    if (!canTransitionDecision(decision.status, 'decided')) {
+      return { ok: false, reason: `A ${decision.status} decision cannot be decided again.` };
+    }
+
+    const stamp = now.toISOString();
+    await database.decisions.update(id, {
+      status: 'decided',
+      choice,
+      rationale: input.rationale?.trim() ?? decision.rationale,
+      consequences: input.consequences?.trim() ?? decision.consequences,
+      decidedAt: stamp,
+      decidedBy: OPERATOR,
+      updatedAt: stamp,
+      touchedAt: stamp,
+    });
+    await database.events.put(
+      cognitionEvent(decision, 'decision', `Decision recorded: ${decision.title}`, choice, now),
+    );
+    return { ok: true };
+  });
+}
+
+/**
+ * The moves that need no new text: withdrawing an open decision, or reopening a
+ * decided one because the operator changed their mind. Superseding needs the
+ * decision that replaced it, so it has its own writer.
+ */
+export async function setDecisionStatus(
+  id: string,
+  status: DecisionStatus,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<ContentMutationResult> {
+  if (status === 'decided') {
+    return { ok: false, reason: 'Deciding needs the choice and the rationale. Use decideDecision.' };
+  }
+  if (status === 'superseded') {
+    return {
+      ok: false,
+      reason: 'Superseding needs the decision that replaced it. Use supersedeDecision.',
+    };
+  }
+
+  return database.transaction('rw', [database.decisions, database.events], async () => {
+    const decision = await database.decisions.get(id);
+    if (!decision) return { ok: false, reason: 'No decision with that id is in the local store.' };
+    if (decision.status === status) return { ok: false, reason: `Already ${status}.` };
+    if (!canTransitionDecision(decision.status, status)) {
+      return { ok: false, reason: `A ${decision.status} decision cannot move to ${status}.` };
+    }
+
+    const stamp = now.toISOString();
+    await database.decisions.update(id, {
+      status,
+      // A reopened decision is not a decided one: its stamps go with it.
+      decidedAt: status === 'proposed' ? undefined : decision.decidedAt,
+      decidedBy: status === 'proposed' ? undefined : decision.decidedBy,
+      updatedAt: stamp,
+      touchedAt: stamp,
+    });
+    await database.events.put(
+      cognitionEvent(
+        decision,
+        'decision',
+        `${status === 'proposed' ? 'Decision reopened' : 'Decision withdrawn'}: ${decision.title}`,
+        `Was ${decision.status}.`,
+        now,
+      ),
+    );
+    return { ok: true };
+  });
+}
+
+/** Replaces one decision with another, keeping both and the link between them. */
+export async function supersedeDecision(
+  id: string,
+  supersededById: string,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<ContentMutationResult> {
+  if (id === supersededById) {
+    return { ok: false, reason: 'A decision cannot supersede itself.' };
+  }
+
+  return database.transaction('rw', [database.decisions, database.events], async () => {
+    const decision = await database.decisions.get(id);
+    if (!decision) return { ok: false, reason: 'No decision with that id is in the local store.' };
+    const replacement = await database.decisions.get(supersededById);
+    if (!replacement) return { ok: false, reason: 'The replacing decision is not in the store.' };
+    if (!canTransitionDecision(decision.status, 'superseded')) {
+      return { ok: false, reason: `A ${decision.status} decision cannot be superseded.` };
+    }
+
+    const stamp = now.toISOString();
+    await database.decisions.update(id, {
+      status: 'superseded',
+      supersededById,
+      updatedAt: stamp,
+      touchedAt: stamp,
+    });
+    await database.events.put(
+      cognitionEvent(
+        decision,
+        'decision',
+        `Decision superseded: ${decision.title}`,
+        `Replaced by "${replacement.title}".`,
+        now,
+      ),
+    );
+    return { ok: true };
+  });
+}
+
+export interface NewPrompt {
+  title: string;
+  intent?: PromptIntent;
+  body: string;
+  notes?: string;
+  tags?: string[];
+  providerPreference?: string[];
+  requiresApproval?: boolean;
+}
+
+/** `{{placeholders}}` are read off the body, so the two can never disagree. */
+export function promptVariables(body: string): string[] {
+  const found = body.match(/\{\{\s*([a-zA-Z0-9_-]+)\s*\}\}/g) ?? [];
+  return [...new Set(found.map((token) => token.replace(/[{}\s]/g, '')))];
+}
+
+export async function savePrompt(
+  input: NewPrompt,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<Prompt | null> {
+  const title = input.title.trim();
+  const body = input.body.trim();
+  if (title.length === 0 || body.length === 0) return null;
+
+  const stamp = now.toISOString();
+  const prompt: Prompt = {
+    id: localId('pr', now),
+    source: 'local',
+    createdAt: stamp,
+    updatedAt: stamp,
+    touchedAt: stamp,
+    title,
+    intent: input.intent ?? 'draft',
+    body,
+    notes: input.notes?.trim() ?? '',
+    tags: cleanTags(input.tags),
+    variables: promptVariables(body),
+    providerPreference: input.providerPreference ?? [],
+    requiresApproval: input.requiresApproval ?? true,
+    useCount: 0,
+  };
+
+  await database.transaction('rw', [database.prompts, database.events], async () => {
+    await database.prompts.add(prompt);
+    await database.events.put(
+      cognitionEvent(prompt, 'prompt', `Prompt saved: ${prompt.title}`, prompt.notes, now),
+    );
+  });
+
+  return prompt;
+}
+
+/** Counts a use. Running the prompt is the kernel's business; this is bookkeeping. */
+export async function recordPromptUse(
+  id: string,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const prompt = await database.prompts.get(id);
+  if (!prompt) return false;
+
+  const stamp = now.toISOString();
+  const updated = await database.prompts.update(id, {
+    useCount: prompt.useCount + 1,
+    lastUsedAt: stamp,
+    updatedAt: stamp,
+    touchedAt: stamp,
+  });
+  return updated > 0;
+}
+
+export interface NewResearchItem {
+  question: string;
+  topic?: string;
+  priority?: Priority;
+  dueAt?: string;
+  tags?: string[];
+  knowledgeNodeId?: string;
+  opportunityId?: string;
+  contentIdeaId?: string;
+  companyId?: string;
+}
+
+export async function captureResearchItem(
+  input: NewResearchItem,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<ResearchItem | null> {
+  const question = input.question.trim();
+  if (question.length === 0) return null;
+
+  const stamp = now.toISOString();
+  const item: ResearchItem = {
+    id: localId('res', now),
+    source: 'local',
+    createdAt: stamp,
+    updatedAt: stamp,
+    touchedAt: stamp,
+    question,
+    topic: input.topic?.trim() ?? '',
+    status: 'queued',
+    priority: input.priority ?? 'normal',
+    dueAt: input.dueAt,
+    findings: [],
+    answer: '',
+    tags: cleanTags(input.tags),
+    knowledgeNodeId: input.knowledgeNodeId,
+    opportunityId: input.opportunityId,
+    contentIdeaId: input.contentIdeaId,
+    companyId: input.companyId,
+  };
+
+  await database.transaction('rw', [database.researchItems, database.events], async () => {
+    await database.researchItems.add(item);
+    await database.events.put(
+      cognitionEvent(item, 'research', `Research queued: ${item.question}`, item.topic, now),
+    );
+  });
+
+  return item;
+}
+
+export async function setResearchStatus(
+  id: string,
+  status: ResearchStatus,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<ContentMutationResult> {
+  if (status === 'answered') {
+    return { ok: false, reason: 'An answered question needs its answer. Use answerResearchItem.' };
+  }
+
+  return database.transaction('rw', [database.researchItems, database.events], async () => {
+    const item = await database.researchItems.get(id);
+    if (!item) return { ok: false, reason: 'No research item with that id is in the local store.' };
+    if (item.status === status) return { ok: false, reason: `Already ${status}.` };
+
+    const stamp = now.toISOString();
+    await database.researchItems.update(id, {
+      status,
+      // Reopening an answered question clears the answer's date, not the answer:
+      // the text stays visible as the answer that was withdrawn.
+      answeredAt: undefined,
+      updatedAt: stamp,
+      touchedAt: stamp,
+    });
+    await database.events.put(
+      cognitionEvent(
+        item,
+        'research',
+        `Research ${status}: ${item.question}`,
+        `Was ${item.status}.`,
+        now,
+      ),
+    );
+    return { ok: true };
+  });
+}
+
+/**
+ * Appends a finding somebody wrote down. Nothing here was fetched: this surface
+ * has no crawler, and `source` is whatever the operator typed.
+ */
+export async function recordResearchFinding(
+  id: string,
+  note: string,
+  source = '',
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<ContentMutationResult> {
+  const text = note.trim();
+  if (text.length === 0) return { ok: false, reason: 'A finding needs something written in it.' };
+
+  return database.transaction('rw', [database.researchItems, database.events], async () => {
+    const item = await database.researchItems.get(id);
+    if (!item) return { ok: false, reason: 'No research item with that id is in the local store.' };
+
+    const stamp = now.toISOString();
+    await database.researchItems.update(id, {
+      findings: [...item.findings, { at: stamp, note: text, source: source.trim() }],
+      // Recording a finding is what makes a queued question active.
+      status: item.status === 'queued' ? 'active' : item.status,
+      updatedAt: stamp,
+      touchedAt: stamp,
+    });
+    await database.events.put(
+      cognitionEvent(item, 'research', `Finding recorded: ${item.question}`, text, now),
+    );
+    return { ok: true };
+  });
+}
+
+export async function answerResearchItem(
+  id: string,
+  answer: string,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<ContentMutationResult> {
+  const text = answer.trim();
+  if (text.length === 0) return { ok: false, reason: 'An answer needs something written in it.' };
+
+  return database.transaction('rw', [database.researchItems, database.events], async () => {
+    const item = await database.researchItems.get(id);
+    if (!item) return { ok: false, reason: 'No research item with that id is in the local store.' };
+
+    const stamp = now.toISOString();
+    await database.researchItems.update(id, {
+      status: 'answered',
+      answer: text,
+      answeredAt: stamp,
+      updatedAt: stamp,
+      touchedAt: stamp,
+    });
+    await database.events.put(
+      cognitionEvent(item, 'research', `Research answered: ${item.question}`, text, now),
+    );
+    return { ok: true };
+  });
+}
+
+export interface NewAgentSession {
+  title: string;
+  intent?: string;
+  promptId?: string;
+  providerPreference?: string[];
+  requiresApproval?: boolean;
+  /** Seeds the thread with the operator's opening turn, unsent. */
+  opening?: string;
+}
+
+export async function startAgentSession(
+  input: NewAgentSession,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<AgentSession | null> {
+  const title = input.title.trim();
+  if (title.length === 0) return null;
+
+  const stamp = now.toISOString();
+  const session: AgentSession = {
+    id: localId('ags', now),
+    source: 'local',
+    createdAt: stamp,
+    updatedAt: stamp,
+    touchedAt: stamp,
+    title,
+    intent: input.intent?.trim() ?? 'workspace',
+    promptId: input.promptId,
+    providerPreference: input.providerPreference ?? [],
+    requiresApproval: input.requiresApproval ?? true,
+    lastActivityAt: stamp,
+    unansweredCount: 0,
+  };
+
+  await database.transaction(
+    'rw',
+    [database.agentSessions, database.agentMessages, database.prompts, database.events],
+    async () => {
+      await database.agentSessions.add(session);
+      const opening = input.opening?.trim() ?? '';
+      if (opening.length > 0) {
+        await database.agentMessages.add({
+          id: localId('agm', now),
+          source: 'local',
+          createdAt: stamp,
+          updatedAt: stamp,
+          touchedAt: stamp,
+          sessionId: session.id,
+          role: 'user',
+          content: opening,
+          at: stamp,
+          generated: false,
+          outcome: 'sent',
+        });
+      }
+      if (input.promptId !== undefined) {
+        const prompt = await database.prompts.get(input.promptId);
+        if (prompt) {
+          await database.prompts.update(input.promptId, {
+            useCount: prompt.useCount + 1,
+            lastUsedAt: stamp,
+            updatedAt: stamp,
+            touchedAt: stamp,
+          });
+        }
+      }
+      await database.events.put(
+        cognitionEvent(session, 'agent', `Agent session opened: ${session.title}`, session.intent, now),
+      );
+    },
+  );
+
+  return session;
+}
+
+export interface AgentTurnResult {
+  ok: boolean;
+  reason?: string;
+  result?: AgentResult;
+}
+
+/**
+ * One turn of the AI Workspace, and the only path by which agent output can
+ * reach the store.
+ *
+ * The operator's message is written first, then the kernel is asked, and
+ * whatever it answers is written verbatim — a completion with `generated: true`
+ * and the provider that produced it, or the refusal with its reason. There is
+ * no branch that writes assistant text the kernel did not return, which is what
+ * makes "awaiting credentials" impossible to mistake for a live answer.
+ */
+export async function runAgentTurn(
+  sessionId: string,
+  text: string,
+  kernel: AgentKernel,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<AgentTurnResult> {
+  const content = text.trim();
+  if (content.length === 0) return { ok: false, reason: 'Nothing to send.' };
+
+  const session = await database.agentSessions.get(sessionId);
+  if (!session) return { ok: false, reason: 'No session with that id is in the local store.' };
+
+  const history = (await database.agentMessages.where('sessionId').equals(sessionId).toArray())
+    .sort((a, b) => Date.parse(a.at) - Date.parse(b.at))
+    .filter((message) => message.outcome !== 'refused')
+    .map((message) => ({ role: message.role, content: message.content }));
+
+  const stamp = now.toISOString();
+  const request: AgentRequest = {
+    intent: session.intent,
+    messages: [...history, { role: 'user', content }],
+    providerPreference: session.providerPreference,
+    policy: { requiresApproval: session.requiresApproval },
+  };
+
+  const result = await kernel.run(request);
+
+  const userMessage: AgentMessage = {
+    id: localId('agm', now),
+    source: 'local',
+    createdAt: stamp,
+    updatedAt: stamp,
+    touchedAt: stamp,
+    sessionId,
+    role: 'user',
+    content,
+    at: stamp,
+    generated: false,
+    outcome: 'sent',
+  };
+
+  const replyStamp = new Date(now.getTime() + 1).toISOString();
+  const reply: AgentMessage = result.ok
+    ? {
+        id: localId('agm', new Date(now.getTime() + 1)),
+        source: 'local',
+        createdAt: replyStamp,
+        updatedAt: replyStamp,
+        touchedAt: replyStamp,
+        sessionId,
+        role: 'assistant',
+        content: result.text,
+        at: replyStamp,
+        generated: true,
+        provider: result.provider,
+        outcome: 'generated',
+      }
+    : {
+        id: localId('agm', new Date(now.getTime() + 1)),
+        source: 'local',
+        createdAt: replyStamp,
+        updatedAt: replyStamp,
+        touchedAt: replyStamp,
+        sessionId,
+        role: 'assistant',
+        content: result.message,
+        at: replyStamp,
+        generated: false,
+        provider: result.provider,
+        outcome: 'refused',
+        reason: result.reason,
+      };
+
+  await database.transaction(
+    'rw',
+    [database.agentSessions, database.agentMessages, database.events],
+    async () => {
+      await database.agentMessages.bulkAdd([userMessage, reply]);
+      await database.agentSessions.update(sessionId, {
+        lastActivityAt: replyStamp,
+        unansweredCount: session.unansweredCount + (result.ok ? 0 : 1),
+        updatedAt: replyStamp,
+        touchedAt: replyStamp,
+      });
+      await database.events.put(
+        cognitionEvent(
+          session,
+          'agent',
+          result.ok
+            ? `Agent turn completed by ${String(result.provider)}: ${session.title}`
+            : `Agent turn refused (${result.reason}): ${session.title}`,
+          result.ok ? 'Output requires the human gate before it reaches anyone.' : result.message,
+          now,
+        ),
+      );
+    },
+  );
+
+  return { ok: result.ok, reason: result.ok ? undefined : result.message, result };
 }
 
 /** Meeting notes are the operator's account of what happened, so they persist. */

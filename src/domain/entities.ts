@@ -397,6 +397,8 @@ export const activityEventSchema = recordBase.extend({
     'inbox',
     'execution',
     'relationship',
+    /** Wave 5: knowledge, memory, documents, decisions, research, agent turns. */
+    'cognition',
   ]),
 });
 export type ActivityEvent = z.infer<typeof activityEventSchema>;
