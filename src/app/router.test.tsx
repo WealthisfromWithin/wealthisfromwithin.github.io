@@ -14,6 +14,9 @@ const RECORD_IDS: Record<string, string> = {
   'crm-company': 'co-truoak',
   'pipeline-opportunity': 'opp-truoak',
   'content-item': 'c-constraint',
+  'knowledge-node': 'kn-compounding-thesis',
+  document: 'doc-truoak-renewal-memo',
+  decision: 'dec-no-discount',
 };
 
 function renderAt(path: string) {
@@ -70,7 +73,7 @@ describe('router', () => {
   );
 
   it('sends an unrouted path back to the brief rather than a coming-soon page', async () => {
-    renderAt('/knowledge');
+    renderAt('/automations');
 
     expect(
       within(await page()).getByRole('heading', { level: 1, name: 'Morning Brief' }),

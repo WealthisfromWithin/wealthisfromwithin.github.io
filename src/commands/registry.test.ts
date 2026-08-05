@@ -98,6 +98,28 @@ describe('command registry', () => {
     }
   });
 
+  it('reaches the Wave 5 cognition surfaces', () => {
+    const ids = new Set(commands().map((command) => command.id));
+
+    for (const id of [
+      'navigate:knowledge',
+      'navigate:memory',
+      'navigate:documents',
+      'navigate:decisions',
+      'navigate:prompts',
+      'navigate:research',
+      'navigate:ai',
+      'act:decisions-open',
+      'act:memory-review',
+      'act:research-open',
+      'surface:knowledge-pinned',
+      'surface:documents',
+      'surface:ai-workspace',
+    ]) {
+      expect({ id, offered: ids.has(id) }).toEqual({ id, offered: true });
+    }
+  });
+
   it('runs the mark-all-read action instead of navigating', async () => {
     const markAllRead = vi.fn(() => Promise.resolve());
     const command = buildCommands({

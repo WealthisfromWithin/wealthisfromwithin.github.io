@@ -8,10 +8,19 @@ import {
 } from '@/modules/content/content';
 import { CRM_TEMPERATURES, CRM_VIEWS } from '@/modules/crm/crm';
 import { CALENDAR_WEEKS } from '@/modules/calendar/calendar';
+import { DECISION_FILTERS } from '@/modules/decisions/decisions';
+import {
+  DOCUMENT_KIND_FILTERS,
+  DOCUMENT_STATUS_FILTERS,
+} from '@/modules/documents/documents';
 import { INBOX_SEVERITY_FILTERS, INBOX_STATUS_FILTERS } from '@/modules/inbox/notifications';
+import { KNOWLEDGE_KIND_FILTERS, KNOWLEDGE_VIEWS } from '@/modules/knowledge/knowledge';
 import { MEETING_WINDOWS } from '@/modules/meetings/meetings';
+import { MEMORY_KIND_FILTERS, MEMORY_STATES } from '@/modules/memory/memory';
 import { PIPELINE_STAGE_FILTERS } from '@/modules/pipeline/pipeline';
 import { PROJECT_FILTERS } from '@/modules/projects/projects';
+import { PROMPT_FILTERS } from '@/modules/prompts/prompts';
+import { RESEARCH_FILTERS } from '@/modules/research/research';
 import { TASK_PRIORITY_FILTERS, TASK_STATUS_FILTERS } from '@/modules/tasks/tasks';
 import { enabledModules, enabledRecordRoutes, enabledSubRoutes } from './modules';
 
@@ -63,6 +72,27 @@ const ALLOWED_QUERY_PARAMS: Record<string, Record<string, readonly string[]>> = 
   },
   '/content/library': {
     type: LIBRARY_TYPES,
+  },
+  '/knowledge': {
+    view: KNOWLEDGE_VIEWS,
+    kind: KNOWLEDGE_KIND_FILTERS,
+  },
+  '/memory': {
+    state: MEMORY_STATES,
+    kind: MEMORY_KIND_FILTERS,
+  },
+  '/documents': {
+    status: DOCUMENT_STATUS_FILTERS,
+    kind: DOCUMENT_KIND_FILTERS,
+  },
+  '/decisions': {
+    status: DECISION_FILTERS,
+  },
+  '/prompts': {
+    intent: PROMPT_FILTERS,
+  },
+  '/research': {
+    status: RESEARCH_FILTERS,
   },
 };
 
@@ -177,4 +207,16 @@ export function opportunityHref(id: string): string {
 
 export function contentHref(id: string): string {
   return recordHref('content-item', id, '/content');
+}
+
+export function knowledgeHref(id: string): string {
+  return recordHref('knowledge-node', id, '/knowledge');
+}
+
+export function documentHref(id: string): string {
+  return recordHref('document', id, '/documents');
+}
+
+export function decisionHref(id: string): string {
+  return recordHref('decision', id, '/decisions');
 }

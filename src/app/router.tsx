@@ -3,6 +3,7 @@ import { AppShell } from './shell/AppShell';
 import { enabledModules, enabledRecordRoutes, enabledSubRoutes } from './modules';
 import { MorningBriefPage } from '@/modules/dashboard/MorningBriefPage';
 import {
+  AiWorkspacePage,
   ApprovalsPage,
   CalendarPage,
   CompanyDetailPage,
@@ -14,14 +15,23 @@ import {
   ContentLibraryPage,
   ContentPage,
   CrmPage,
+  DecisionPage,
+  DecisionsPage,
+  DocumentPage,
+  DocumentsPage,
   HealthPage,
   InboxPage,
   IntegrationsPage,
+  KnowledgeNodePage,
+  KnowledgePage,
   MeetingsPage,
+  MemoryPage,
   OpportunityDetailPage,
   PersonDetailPage,
   PipelinePage,
   ProjectsPage,
+  PromptsPage,
+  ResearchPage,
   SettingsPage,
   TasksPage,
 } from './lazyModules';
@@ -43,6 +53,13 @@ const moduleElements: Record<string, RouteObject['element']> = {
   calendar: <CalendarPage />,
   meetings: <MeetingsPage />,
   content: <ContentPage />,
+  decisions: <DecisionsPage />,
+  knowledge: <KnowledgePage />,
+  memory: <MemoryPage />,
+  documents: <DocumentsPage />,
+  research: <ResearchPage />,
+  ai: <AiWorkspacePage />,
+  prompts: <PromptsPage />,
   integrations: <IntegrationsPage />,
   settings: <SettingsPage />,
 };
@@ -62,6 +79,9 @@ const recordElements: Record<string, RouteObject['element']> = {
   'crm-company': <CompanyDetailPage />,
   'pipeline-opportunity': <OpportunityDetailPage />,
   'content-item': <ContentItemPage />,
+  'knowledge-node': <KnowledgeNodePage />,
+  document: <DocumentPage />,
+  decision: <DecisionPage />,
 };
 
 function buildModuleRoutes(): RouteObject[] {

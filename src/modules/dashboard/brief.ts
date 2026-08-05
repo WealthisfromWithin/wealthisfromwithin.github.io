@@ -1,8 +1,9 @@
 import type { SovereignDataset } from '@/data/dataset';
-import { contentHref, normalizeInternalHref, opportunityHref } from '@/app/href';
+import { contentHref, decisionHref, normalizeInternalHref, opportunityHref } from '@/app/href';
 import { DAY_MS, formatClockTime } from '@/lib/clock';
 import { formatCurrencyCents, formatDelta, formatMetricValue } from '@/lib/format';
 import { countByState } from '@/integrations/state';
+import { sessionsAwaitingProvider } from '@/modules/ai/workspace';
 import { dayAgenda } from '@/modules/calendar/calendar';
 import {
   contentAwaitingApproval,
@@ -12,12 +13,19 @@ import {
 } from '@/modules/content/content';
 import { contentLearningInsights } from '@/modules/content/learning';
 import {
+  decisionsAwaitingCall,
+  isDueForReview as isDecisionDueForReview,
+  isOverdue as isDecisionOverdue,
+} from '@/modules/decisions/decisions';
+import { memoriesNeedingReview } from '@/modules/memory/memory';
+import {
   daysInStage,
   expectedValueCents,
   isStalled,
   pipelineStageLabel,
   selectOpportunities,
 } from '@/modules/pipeline/pipeline';
+import { researchDue } from '@/modules/research/research';
 import { isOverdue } from '@/modules/tasks/tasks';
 
 export const BRIEF_QUESTIONS = [
@@ -63,11 +71,13 @@ export interface MorningBrief {
 const SECTION_LIMIT = 6;
 
 /**
- * The attention question is the one the surface exists to answer, and Wave 3
- * gave it two more sources (overdue work and stalled deals). It gets a deeper cut
- * before truncation; every section still prints `shown/total` when it truncates.
+ * The attention question is the one the surface exists to answer. Wave 3 gave it
+ * two more sources (overdue work and stalled deals) and Wave 5 three more (calls
+ * nobody has made, questions past their date, memory past its review). It gets a
+ * deeper cut before truncation; every section still prints `shown/total` when it
+ * truncates.
  */
-const ATTENTION_LIMIT = 9;
+const ATTENTION_LIMIT = 12;
 
 function isDemo(source: string): boolean {
   return source === 'demo';
@@ -75,6 +85,35 @@ function isDemo(source: string): boolean {
 
 function attentionSection(dataset: SovereignDataset, now: Date): BriefItem[] {
   const items: BriefItem[] = [];
+
+  // The two derived lines lead: they summarise a whole class rather than one
+  // record, and the sort below is stable, so truncation can never hide the fact
+  // that nothing external can act or that the memory has gone stale.
+  const credentialGaps = countByState(dataset.integrations).awaiting_credentials;
+  if (credentialGaps > 0) {
+    items.push({
+      id: 'integrations:awaiting',
+      title: `${String(credentialGaps)} integrations await credentials`,
+      detail: 'No external system can act until these are configured.',
+      meta: 'Integration registry',
+      tone: 'warning',
+      demo: false,
+      href: '/integrations',
+    });
+  }
+
+  const staleMemories = memoriesNeedingReview(dataset, now);
+  if (staleMemories.length > 0) {
+    items.push({
+      id: 'memory:review',
+      title: `${String(staleMemories.length)} memories are past their review date`,
+      detail: 'The store keeps them, and stops treating them as current until re-confirmed.',
+      meta: 'Memory',
+      tone: 'warning',
+      demo: staleMemories.some((entry) => isDemo(entry.source)),
+      href: '/memory?state=review',
+    });
+  }
 
   for (const notification of dataset.notifications) {
     if (notification.read || notification.severity === 'info') continue;
@@ -158,16 +197,50 @@ function attentionSection(dataset: SovereignDataset, now: Date): BriefItem[] {
     });
   }
 
-  const counts = countByState(dataset.integrations);
-  if (counts.awaiting_credentials > 0) {
+  // A decision nobody has made is the most expensive item on this list: it holds
+  // up everything downstream of it and nothing else in the store will make it.
+  for (const decision of decisionsAwaitingCall(dataset)) {
+    const overdue = isDecisionOverdue(decision, now);
     items.push({
-      id: 'integrations:awaiting',
-      title: `${String(counts.awaiting_credentials)} integrations await credentials`,
-      detail: 'No external system can act until these are configured.',
-      meta: 'Integration registry',
+      id: `decision:${decision.id}`,
+      title: `${overdue ? 'Overdue decision' : 'Decision'}: ${decision.title}`,
+      detail:
+        decision.context.length > 0
+          ? decision.context
+          : 'No context is recorded against this call.',
+      meta: decision.reversible ? `${decision.impact} impact` : 'one-way door',
+      tone: overdue || !decision.reversible ? 'critical' : 'warning',
+      demo: isDemo(decision.source),
+      href: decisionHref(decision.id),
+    });
+  }
+
+  for (const decision of dataset.decisions) {
+    if (!isDecisionDueForReview(decision, now)) continue;
+    items.push({
+      id: `decision-review:${decision.id}`,
+      title: `Review the call: ${decision.title}`,
+      detail:
+        decision.choice.length > 0 ? decision.choice : 'No choice is recorded against this call.',
+      meta: 'past its review date',
       tone: 'warning',
-      demo: false,
-      href: '/integrations',
+      demo: isDemo(decision.source),
+      href: decisionHref(decision.id),
+    });
+  }
+
+  for (const item of researchDue(dataset, now)) {
+    items.push({
+      id: `research:${item.id}`,
+      title: `Question due: ${item.question}`,
+      detail:
+        item.findings.length === 0
+          ? 'Nothing has been recorded against it. No connector will fetch an answer.'
+          : `${String(item.findings.length)} findings recorded, no answer written.`,
+      meta: item.topic.length > 0 ? item.topic : 'research',
+      tone: 'warning',
+      demo: isDemo(item.source),
+      href: '/research',
     });
   }
 
@@ -327,6 +400,19 @@ function blockedSection(dataset: SovereignDataset): BriefItem[] {
       tone: 'warning',
       demo: isDemo(item.source),
       href: contentHref(item.id),
+    });
+  }
+
+  // A session the kernel could not run is blocked on a credential, not on work.
+  for (const session of sessionsAwaitingProvider(dataset)) {
+    items.push({
+      id: `session:${session.id}`,
+      title: session.title,
+      detail: `${String(session.unansweredCount)} turns the Agent Kernel could not run. No provider adapter is configured.`,
+      meta: 'AI Workspace',
+      tone: 'warning',
+      demo: isDemo(session.source),
+      href: '/ai',
     });
   }
 

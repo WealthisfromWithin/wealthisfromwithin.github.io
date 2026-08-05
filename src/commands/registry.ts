@@ -2,19 +2,25 @@ import type { LucideIcon } from 'lucide-react';
 import {
   Activity,
   ArrowRight,
+  Bot,
+  Brain,
   CalendarDays,
   ChartColumn,
   CheckCheck,
   Database,
+  FileStack,
   FileText,
   Flame,
   Inbox,
   Lightbulb,
   ListChecks,
   NotebookPen,
+  Radar,
   RefreshCw,
+  ScrollText,
   Search,
   ShieldCheck,
+  Sparkles,
   TrendingUp,
 } from 'lucide-react';
 import { enabledModules } from '@/app/modules';
@@ -157,6 +163,72 @@ export function buildCommands(actions: CommandActions): Command[] {
       icon: CalendarDays,
       run: () => {
         actions.navigate('/content/calendar');
+      },
+    },
+    {
+      id: 'act:decisions-open',
+      label: 'Decisions awaiting a call',
+      hint: 'Every consequential question nobody has answered yet.',
+      group: 'act',
+      keywords: ['decision', 'call', 'choose', 'open', 'log'],
+      icon: ScrollText,
+      run: () => {
+        actions.navigate('/decisions?status=proposed');
+      },
+    },
+    {
+      id: 'act:memory-review',
+      label: 'Memories past their review date',
+      hint: 'Durable facts the store will not keep trusting without a re-confirmation.',
+      group: 'act',
+      keywords: ['memory', 'review', 'stale', 'confirm', 'decay'],
+      icon: Sparkles,
+      run: () => {
+        actions.navigate('/memory?state=review');
+      },
+    },
+    {
+      id: 'act:research-open',
+      label: 'Open research questions',
+      hint: 'Questions with no answer. Nothing fetches one; findings are written by hand.',
+      group: 'act',
+      keywords: ['research', 'question', 'unknown', 'finding'],
+      icon: Radar,
+      run: () => {
+        actions.navigate('/research');
+      },
+    },
+    {
+      id: 'surface:knowledge-pinned',
+      label: 'Pinned knowledge',
+      hint: 'What the operation knows, with the records each note is about.',
+      group: 'surface',
+      keywords: ['knowledge', 'notes', 'insight', 'playbook', 'pinned'],
+      icon: Brain,
+      run: () => {
+        actions.navigate('/knowledge?view=pinned');
+      },
+    },
+    {
+      id: 'surface:documents',
+      label: 'Open the document store',
+      hint: 'Local documents rendered as text. Nothing is uploaded or hosted.',
+      group: 'surface',
+      keywords: ['document', 'memo', 'proposal', 'sop', 'transcript'],
+      icon: FileStack,
+      run: () => {
+        actions.navigate('/documents');
+      },
+    },
+    {
+      id: 'surface:ai-workspace',
+      label: 'Open the AI Workspace',
+      hint: 'Sessions against the Agent Kernel. It refuses rather than pretends.',
+      group: 'surface',
+      keywords: ['ai', 'agent', 'kernel', 'model', 'provider', 'llm'],
+      icon: Bot,
+      run: () => {
+        actions.navigate('/ai');
       },
     },
     {

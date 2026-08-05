@@ -3,7 +3,10 @@ import { enabledModules, enabledSubRoutes } from './modules';
 import {
   companyHref,
   contentHref,
+  decisionHref,
+  documentHref,
   isSafeInternalHref,
+  knowledgeHref,
   normalizeInternalHref,
   opportunityHref,
   personHref,
@@ -42,6 +45,15 @@ describe('isSafeInternalHref', () => {
     expect(isSafeInternalHref('/content/ideas?status=all')).toBe(true);
     expect(isSafeInternalHref('/content/calendar?week=next')).toBe(true);
     expect(isSafeInternalHref('/content/library?type=ctas')).toBe(true);
+    expect(isSafeInternalHref('/knowledge?view=pinned')).toBe(true);
+    expect(isSafeInternalHref('/knowledge?view=all&kind=playbook')).toBe(true);
+    expect(isSafeInternalHref('/memory?state=review')).toBe(true);
+    expect(isSafeInternalHref('/memory?state=all&kind=constraint')).toBe(true);
+    expect(isSafeInternalHref('/documents?status=final')).toBe(true);
+    expect(isSafeInternalHref('/documents?status=all&kind=sop')).toBe(true);
+    expect(isSafeInternalHref('/decisions?status=proposed')).toBe(true);
+    expect(isSafeInternalHref('/prompts?intent=critique')).toBe(true);
+    expect(isSafeInternalHref('/research?status=answered')).toBe(true);
   });
 
   it('allows the declared record detail routes', () => {
@@ -49,6 +61,10 @@ describe('isSafeInternalHref', () => {
     expect(isSafeInternalHref('/crm/company/co-truoak')).toBe(true);
     expect(isSafeInternalHref('/pipeline/opportunity/opp-truoak')).toBe(true);
     expect(isSafeInternalHref('/content/item/c-constraint')).toBe(true);
+    expect(isSafeInternalHref('/knowledge/node/kn-compounding-thesis')).toBe(true);
+    expect(isSafeInternalHref('/documents/doc-truoak-renewal-memo')).toBe(false);
+    expect(isSafeInternalHref('/documents/doc/doc-truoak-renewal-memo')).toBe(true);
+    expect(isSafeInternalHref('/decisions/entry/dec-no-discount')).toBe(true);
   });
 
   it('keeps the content hub sub-routes and its detail route apart', () => {
@@ -123,8 +139,8 @@ describe('isSafeInternalHref', () => {
 
   it('rejects planned-module paths', () => {
     expect(isSafeInternalHref('/missions')).toBe(false);
-    expect(isSafeInternalHref('/knowledge')).toBe(false);
-    expect(isSafeInternalHref('/research')).toBe(false);
+    expect(isSafeInternalHref('/automations')).toBe(false);
+    expect(isSafeInternalHref('/analytics')).toBe(false);
     expect(isSafeInternalHref('/metrics')).toBe(false);
     expect(isSafeInternalHref('/sync')).toBe(false);
   });
@@ -159,7 +175,7 @@ describe('normalizeInternalHref', () => {
     expect(normalizeInternalHref('javascript:alert(1)', '/inbox')).toBe('/inbox');
     expect(normalizeInternalHref('https://evil.example', '/approvals')).toBe('/approvals');
     expect(normalizeInternalHref('//evil.example', '/')).toBe('/');
-    expect(normalizeInternalHref('/knowledge', '/inbox')).toBe('/inbox');
+    expect(normalizeInternalHref('/missions', '/inbox')).toBe('/inbox');
   });
 });
 
@@ -169,6 +185,9 @@ describe('record link builders', () => {
     expect(companyHref('co-truoak')).toBe('/crm/company/co-truoak');
     expect(opportunityHref('opp-truoak')).toBe('/pipeline/opportunity/opp-truoak');
     expect(contentHref('c-constraint')).toBe('/content/item/c-constraint');
+    expect(knowledgeHref('kn-compounding-thesis')).toBe('/knowledge/node/kn-compounding-thesis');
+    expect(documentHref('doc-advisory-sop')).toBe('/documents/doc/doc-advisory-sop');
+    expect(decisionHref('dec-no-discount')).toBe('/decisions/entry/dec-no-discount');
   });
 
   it('degrades to the module list rather than emitting an unsafe link', () => {
@@ -178,6 +197,9 @@ describe('record link builders', () => {
     expect(opportunityHref('javascript:alert(1)')).toBe('/pipeline');
     expect(contentHref('../ideas')).toBe('/content');
     expect(contentHref('')).toBe('/content');
+    expect(knowledgeHref('../node')).toBe('/knowledge');
+    expect(documentHref('doc truoak?x=1')).toBe('/documents');
+    expect(decisionHref('javascript:alert(1)')).toBe('/decisions');
   });
 
   it('emits only hrefs the allowlist accepts', () => {
@@ -186,6 +208,9 @@ describe('record link builders', () => {
       companyHref('co-1'),
       opportunityHref('opp-1'),
       contentHref('c-1'),
+      knowledgeHref('kn-1'),
+      documentHref('doc-1'),
+      decisionHref('dec-1'),
     ]) {
       expect(isSafeInternalHref(href)).toBe(true);
     }

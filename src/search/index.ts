@@ -1,5 +1,13 @@
 import type { SovereignDataset } from '@/data/dataset';
-import { companyHref, contentHref, opportunityHref, personHref } from '@/app/href';
+import {
+  companyHref,
+  contentHref,
+  decisionHref,
+  documentHref,
+  knowledgeHref,
+  opportunityHref,
+  personHref,
+} from '@/app/href';
 import { formatCurrencyCents } from '@/lib/format';
 import {
   contentFormatLabel,
@@ -7,9 +15,15 @@ import {
   ideaScore,
   ideaStatusLabel,
 } from '@/modules/content/content';
+import { decisionStatusLabel } from '@/modules/decisions/decisions';
+import { documentKindLabel, documentStatusLabel } from '@/modules/documents/documents';
+import { knowledgeKindLabel } from '@/modules/knowledge/knowledge';
 import { meetingKindLabel } from '@/modules/meetings/meetings';
+import { memoryKindLabel, memoryScopeLabel } from '@/modules/memory/memory';
 import { pipelineStageLabel } from '@/modules/pipeline/pipeline';
 import { projectStatusLabel } from '@/modules/projects/projects';
+import { promptIntentLabel } from '@/modules/prompts/prompts';
+import { researchStatusLabel } from '@/modules/research/research';
 import { taskStatusLabel } from '@/modules/tasks/tasks';
 import { rankByFuzzy, type RankedResult } from './fuzzy';
 
@@ -30,7 +44,13 @@ export type SearchKind =
   | 'template'
   | 'integration'
   | 'notification'
-  | 'approval';
+  | 'approval'
+  | 'knowledge'
+  | 'memory'
+  | 'document'
+  | 'decision'
+  | 'prompt'
+  | 'research';
 
 export interface SearchDocument {
   id: string;
@@ -60,6 +80,12 @@ export const searchKindLabel: Record<SearchKind, string> = {
   integration: 'Integration',
   notification: 'Signal',
   approval: 'Approval',
+  knowledge: 'Knowledge',
+  memory: 'Memory',
+  document: 'Document',
+  decision: 'Decision',
+  prompt: 'Prompt',
+  research: 'Question',
 };
 
 /**
@@ -283,6 +309,86 @@ export function buildSearchIndex(dataset: SovereignDataset): SearchDocument[] {
       keywords: [approval.summary, approval.requestedBy],
       route: approval.status === 'pending' ? '/approvals' : '/approvals?status=all',
       demo: approval.source === 'demo',
+    });
+  }
+
+  for (const node of dataset.knowledgeNodes) {
+    documents.push({
+      id: `knowledge:${node.id}`,
+      kind: 'knowledge',
+      title: node.title,
+      subtitle: [knowledgeKindLabel[node.kind], node.summary].filter((part) => part.length > 0).join(' · '),
+      keywords: [node.body, node.origin, ...node.tags],
+      route: knowledgeHref(node.id),
+      demo: node.source === 'demo',
+    });
+  }
+
+  for (const entry of dataset.memoryEntries) {
+    documents.push({
+      id: `memory:${entry.id}`,
+      kind: 'memory',
+      title: entry.statement,
+      subtitle: `${memoryKindLabel[entry.kind]} · ${memoryScopeLabel[entry.scope]}`,
+      keywords: [entry.detail, entry.origin, entry.confidence, ...entry.tags],
+      route: entry.retiredAt === undefined ? '/memory' : '/memory?state=retired',
+      demo: entry.source === 'demo',
+    });
+  }
+
+  for (const document of dataset.documents) {
+    documents.push({
+      id: `document:${document.id}`,
+      kind: 'document',
+      title: document.title,
+      subtitle: `${documentStatusLabel[document.status]} · ${documentKindLabel[document.kind]}`,
+      // The body is indexed as text, exactly as it is rendered.
+      keywords: [document.summary, document.body, document.location, ...document.tags],
+      route: documentHref(document.id),
+      demo: document.source === 'demo',
+    });
+  }
+
+  for (const decision of dataset.decisions) {
+    documents.push({
+      id: `decision:${decision.id}`,
+      kind: 'decision',
+      title: decision.title,
+      subtitle: [decisionStatusLabel[decision.status], decision.choice]
+        .filter((part) => part.length > 0)
+        .join(' · '),
+      keywords: [decision.context, decision.rationale, ...decision.alternatives, ...decision.tags],
+      route: decisionHref(decision.id),
+      demo: decision.source === 'demo',
+    });
+  }
+
+  for (const prompt of dataset.prompts) {
+    documents.push({
+      id: `prompt:${prompt.id}`,
+      kind: 'prompt',
+      title: prompt.title,
+      subtitle: `${promptIntentLabel[prompt.intent]} · used ${String(prompt.useCount)}`,
+      keywords: [prompt.body, prompt.notes, ...prompt.variables, ...prompt.tags],
+      route: prompt.intent === 'draft' ? '/prompts' : `/prompts?intent=${prompt.intent}`,
+      demo: prompt.source === 'demo',
+    });
+  }
+
+  for (const item of dataset.researchItems) {
+    documents.push({
+      id: `research:${item.id}`,
+      kind: 'research',
+      title: item.question,
+      subtitle: [researchStatusLabel[item.status], item.topic]
+        .filter((part) => part.length > 0)
+        .join(' · '),
+      keywords: [item.answer, ...item.findings.map((finding) => finding.note), ...item.tags],
+      route:
+        item.status === 'queued' || item.status === 'active'
+          ? '/research'
+          : `/research?status=${item.status}`,
+      demo: item.source === 'demo',
     });
   }
 

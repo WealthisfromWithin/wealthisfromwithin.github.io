@@ -13,19 +13,26 @@ import {
 } from './modules';
 import { routes } from './router';
 
-/** Wave 4 adds the Content OS hub; Wave 5+ stays hidden. */
-const WAVE_4_ENABLED = [
+/** Wave 5 adds the seven cognition surfaces; Wave 6+ stays hidden. */
+const WAVE_5_ENABLED = [
+  'ai',
   'approvals',
   'brief',
   'calendar',
   'content',
   'crm',
+  'decisions',
+  'documents',
   'health',
   'inbox',
   'integrations',
+  'knowledge',
   'meetings',
+  'memory',
   'pipeline',
   'projects',
+  'prompts',
+  'research',
   'settings',
   'tasks',
 ];
@@ -35,8 +42,8 @@ function servedPaths(): string[] {
 }
 
 describe('module registry', () => {
-  it('enables exactly the Wave 1 through Wave 4 modules', () => {
-    expect(enabledModules().map((module) => module.id).sort()).toEqual(WAVE_4_ENABLED);
+  it('enables exactly the Wave 1 through Wave 5 modules', () => {
+    expect(enabledModules().map((module) => module.id).sort()).toEqual(WAVE_5_ENABLED);
   });
 
   it('splits the enabled modules across Commander and Operator', () => {
@@ -44,6 +51,7 @@ describe('module registry', () => {
       'brief',
       'approvals',
       'health',
+      'decisions',
     ]);
     expect(modulesByGroup('operator').map((module) => module.id)).toEqual([
       'inbox',
@@ -54,6 +62,12 @@ describe('module registry', () => {
       'calendar',
       'meetings',
       'content',
+      'knowledge',
+      'memory',
+      'documents',
+      'research',
+      'ai',
+      'prompts',
       'integrations',
       'settings',
     ]);
@@ -68,11 +82,22 @@ describe('module registry', () => {
     }
   });
 
-  it('leaves every Wave 5+ module planned', () => {
+  it('leaves every Wave 6+ module planned', () => {
     for (const module of moduleRegistry) {
-      if (module.wave > 4) expect({ id: module.id, status: module.status }).toEqual({
+      if (module.wave > 5) expect({ id: module.id, status: module.status }).toEqual({
         id: module.id,
         status: 'planned',
+      });
+    }
+  });
+
+  it('enables every Wave 5 module the cognition wave promised', () => {
+    for (const id of ['knowledge', 'memory', 'documents', 'decisions', 'prompts', 'ai', 'research']) {
+      const module = moduleRegistry.find((entry) => entry.id === id);
+      expect({ id, wave: module?.wave, status: module?.status }).toEqual({
+        id,
+        wave: 5,
+        status: 'enabled',
       });
     }
   });
@@ -157,6 +182,9 @@ describe('module registry', () => {
       'crm-company',
       'pipeline-opportunity',
       'content-item',
+      'knowledge-node',
+      'document',
+      'decision',
     ]);
   });
 
