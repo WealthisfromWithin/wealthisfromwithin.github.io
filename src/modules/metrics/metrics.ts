@@ -267,9 +267,10 @@ function deliveryGroup(dataset: SovereignDataset, window: MetricWindow, now: Dat
 function contentGroup(dataset: SovereignDataset, window: MetricWindow, now: Date): KpiGroup {
   const start = metricWindowStart(window, now);
   const published = dataset.contentItems.filter((item) => inWindow(item.publishedAt, start, now));
-  const impressions = dataset.contentMetrics.reduce((total, row) => total + row.impressions, 0);
-  const engagements = dataset.contentMetrics.reduce((total, row) => total + row.engagements, 0);
-  const conversions = dataset.contentMetrics.reduce((total, row) => total + row.conversions, 0);
+  const metricsInWindow = dataset.contentMetrics.filter((row) => inWindow(row.capturedAt, start, now));
+  const impressions = metricsInWindow.reduce((total, row) => total + row.impressions, 0);
+  const engagements = metricsInWindow.reduce((total, row) => total + row.engagements, 0);
+  const conversions = metricsInWindow.reduce((total, row) => total + row.conversions, 0);
   const days = windowDays(window);
 
   return {
@@ -308,24 +309,24 @@ function contentGroup(dataset: SovereignDataset, window: MetricWindow, now: Date
         label: 'Engagement rate',
         value: impressions === 0 ? '—' : percent(engagements, impressions),
         basis:
-          dataset.contentMetrics.length === 0
-            ? 'No performance readings are recorded.'
-            : `${String(engagements)} engagements against ${String(impressions)} impressions across ${String(dataset.contentMetrics.length)} readings.`,
-        sample: dataset.contentMetrics.length,
+          metricsInWindow.length === 0
+            ? 'No performance readings were captured in this window.'
+            : `${String(engagements)} engagements against ${String(impressions)} impressions across ${String(metricsInWindow.length)} readings captured in this window.`,
+        sample: metricsInWindow.length,
         tone: 'info',
         href: '/content/analytics',
-        demo: anyDemo(dataset.contentMetrics),
+        demo: anyDemo(metricsInWindow),
       },
       {
         id: 'conversions',
         label: 'Recorded conversions',
         value: String(conversions),
         basis:
-          'Counted from the readings on the packages. Nothing links a conversion to an opportunity yet, so this is not attributed revenue.',
-        sample: dataset.contentMetrics.length,
+          'Counted from the readings captured on the packages in this window. Nothing links a conversion to an opportunity yet, so this is not attributed revenue.',
+        sample: metricsInWindow.length,
         tone: conversions > 0 ? 'info' : 'muted',
         href: '/content/analytics',
-        demo: anyDemo(dataset.contentMetrics),
+        demo: anyDemo(metricsInWindow),
       },
     ],
   };

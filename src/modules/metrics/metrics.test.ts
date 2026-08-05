@@ -161,6 +161,47 @@ describe('delivery and content', () => {
     expect(kpi?.value).toBe('—');
     expect(kpi?.basis).toContain('No performance readings');
   });
+
+  it('excludes a content metric captured outside the selected window from engagement and conversions', () => {
+    const inWindowRow = {
+      ...dataset.contentMetrics[0]!,
+      id: 'cm-window-in',
+      capturedAt: new Date(NOW.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+      impressions: 1000,
+      engagements: 100,
+      conversions: 5,
+    };
+    const outOfWindowRow = {
+      ...dataset.contentMetrics[0]!,
+      id: 'cm-window-out',
+      capturedAt: new Date(NOW.getTime() - 400 * 24 * 60 * 60 * 1000).toISOString(),
+      impressions: 9000,
+      engagements: 9000,
+      conversions: 900,
+    };
+    const windowed: SovereignDataset = {
+      ...dataset,
+      contentMetrics: [inWindowRow, outOfWindowRow],
+    };
+
+    const engagementRate = kpiGroups(windowed, '30d', NOW)
+      .find((group) => group.id === 'content')
+      ?.kpis.find((row) => row.id === 'engagement-rate');
+    const conversions = kpiGroups(windowed, '30d', NOW)
+      .find((group) => group.id === 'content')
+      ?.kpis.find((row) => row.id === 'conversions');
+
+    expect(engagementRate?.sample).toBe(1);
+    expect(engagementRate?.value).toBe('10%');
+    expect(conversions?.sample).toBe(1);
+    expect(conversions?.value).toBe('5');
+
+    const allTime = kpiGroups(windowed, 'all', NOW)
+      .find((group) => group.id === 'content')
+      ?.kpis.find((row) => row.id === 'conversions');
+    expect(allTime?.sample).toBe(2);
+    expect(allTime?.value).toBe('905');
+  });
 });
 
 describe('gates and leverage', () => {
