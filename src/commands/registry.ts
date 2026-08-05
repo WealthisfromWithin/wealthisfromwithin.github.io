@@ -3,10 +3,13 @@ import {
   Activity,
   ArrowRight,
   CalendarDays,
+  ChartColumn,
   CheckCheck,
   Database,
+  FileText,
   Flame,
   Inbox,
+  Lightbulb,
   ListChecks,
   NotebookPen,
   RefreshCw,
@@ -132,6 +135,50 @@ export function buildCommands(actions: CommandActions): Command[] {
       icon: Flame,
       run: () => {
         actions.navigate('/crm?temperature=dormant');
+      },
+    },
+    {
+      id: 'act:content-review',
+      label: 'Review content awaiting approval',
+      hint: 'Packages holding an open gate. Nothing publishes until one is cleared.',
+      group: 'act',
+      keywords: ['content', 'approval', 'gate', 'review', 'publish'],
+      icon: FileText,
+      run: () => {
+        actions.navigate('/content?status=in_review');
+      },
+    },
+    {
+      id: 'act:content-due',
+      label: 'Content due to publish',
+      hint: 'This week of publish dates. Publishing is recorded by hand.',
+      group: 'act',
+      keywords: ['content', 'calendar', 'publish', 'due', 'schedule'],
+      icon: CalendarDays,
+      run: () => {
+        actions.navigate('/content/calendar');
+      },
+    },
+    {
+      id: 'surface:content-ideas',
+      label: 'Open the idea vault',
+      hint: 'Captured ideas ranked on the scores recorded against them.',
+      group: 'surface',
+      keywords: ['idea', 'vault', 'capture', 'content', 'score'],
+      icon: Lightbulb,
+      run: () => {
+        actions.navigate('/content/ideas');
+      },
+    },
+    {
+      id: 'surface:content-learning',
+      label: 'Content performance and learning',
+      hint: 'Recorded readings, what they suggest, and the size of the sample.',
+      group: 'surface',
+      keywords: ['content', 'analytics', 'learning', 'performance', 'insight'],
+      icon: ChartColumn,
+      run: () => {
+        actions.navigate('/content/analytics');
       },
     },
     {

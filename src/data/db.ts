@@ -2,8 +2,15 @@ import Dexie, { type EntityTable } from 'dexie';
 import type {
   ActivityEvent,
   Approval,
+  Campaign,
   Company,
+  ContentAsset,
+  ContentIdea,
   ContentItem,
+  ContentMetric,
+  ContentTemplate,
+  Cta,
+  Hook,
   Integration,
   LeverageMetric,
   Meeting,
@@ -30,6 +37,13 @@ export class SovereignDb extends Dexie {
   approvals!: EntityTable<Approval, 'id'>;
   opportunities!: EntityTable<Opportunity, 'id'>;
   contentItems!: EntityTable<ContentItem, 'id'>;
+  contentIdeas!: EntityTable<ContentIdea, 'id'>;
+  campaigns!: EntityTable<Campaign, 'id'>;
+  contentAssets!: EntityTable<ContentAsset, 'id'>;
+  contentTemplates!: EntityTable<ContentTemplate, 'id'>;
+  hooks!: EntityTable<Hook, 'id'>;
+  ctas!: EntityTable<Cta, 'id'>;
+  contentMetrics!: EntityTable<ContentMetric, 'id'>;
   notifications!: EntityTable<Notification, 'id'>;
   events!: EntityTable<ActivityEvent, 'id'>;
   metrics!: EntityTable<LeverageMetric, 'id'>;
@@ -83,6 +97,37 @@ export class SovereignDb extends Dexie {
           .toCollection()
           .modify((row) => {
             row.status ??= 'prospect';
+          });
+      });
+
+    // Wave 4 absorbs the ContentDone domain: the vault, the libraries, the
+    // campaigns that group work, and the metric readings performance is counted
+    // from. Version-3 content rows predate the wider status machine and the
+    // format column, so `review` becomes `in_review` and the rest default.
+    this.version(4)
+      .stores({
+        contentItems: 'id, status, format, scheduledFor, campaignId, parentId, ideaId, source',
+        contentIdeas: 'id, status, campaignId, source',
+        campaigns: 'id, status, startAt, source',
+        contentAssets: 'id, kind, source',
+        contentTemplates: 'id, format, source',
+        hooks: 'id, style, source',
+        ctas: 'id, intent, source',
+        contentMetrics: 'id, contentItemId, platform, capturedAt, source',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table<Partial<ContentItem>, string>('contentItems')
+          .toCollection()
+          .modify((row) => {
+            if ((row.status as string | undefined) === 'review') row.status = 'in_review';
+            row.format ??= 'post';
+            row.body ??= '';
+            row.videoScript ??= '';
+            row.complianceSummary ??= '';
+            row.assetIds ??= [];
+            row.variants ??= [];
+            row.tags ??= [];
           });
       });
   }

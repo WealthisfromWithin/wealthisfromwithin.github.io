@@ -146,6 +146,16 @@ export const moduleRegistry: readonly ModuleDefinition[] = [
     icon: NotebookPen,
   },
   {
+    id: 'content',
+    path: '/content',
+    label: 'Content OS',
+    group: 'operator',
+    status: 'enabled',
+    wave: 4,
+    summary: 'Idea vault through publishing analytics. Publishing is recorded, not performed.',
+    icon: FileText,
+  },
+  {
     id: 'integrations',
     path: '/integrations',
     label: 'Integrations',
@@ -170,7 +180,6 @@ export const moduleRegistry: readonly ModuleDefinition[] = [
   // Pipeline, Tasks/Projects, Calendar/Meetings). It waits for the objective and
   // prediction work it actually needs rather than shipping as a mission list.
   { id: 'missions', path: '/missions', label: 'Mission Control', group: 'commander', status: 'planned', wave: 6, summary: 'Objectives, agents, predictions.', icon: Target },
-  { id: 'content', path: '/content', label: 'Content OS', group: 'operator', status: 'planned', wave: 4, summary: 'Idea vault through publishing analytics.', icon: FileText },
   { id: 'knowledge', path: '/knowledge', label: 'Knowledge', group: 'operator', status: 'planned', wave: 5, summary: 'Memory, documents, compounding context.', icon: Brain },
   { id: 'research', path: '/research', label: 'Research', group: 'operator', status: 'planned', wave: 5, summary: 'External signal capture.', icon: Radar },
   { id: 'ai', path: '/ai', label: 'AI Workspace', group: 'operator', status: 'planned', wave: 5, summary: 'Prompt library and kernel sessions.', icon: Bot },
@@ -179,6 +188,62 @@ export const moduleRegistry: readonly ModuleDefinition[] = [
   { id: 'metrics', path: '/metrics', label: 'Business Metrics', group: 'commander', status: 'planned', wave: 6, summary: 'Financial KPIs and leverage proof.', icon: ChartColumn },
   { id: 'analytics', path: '/analytics', label: 'Analytics', group: 'operator', status: 'planned', wave: 6, summary: 'Learning loop reporting.', icon: Layers },
   { id: 'sync', path: '/sync', label: 'Command API Sync', group: 'operator', status: 'planned', wave: 7, summary: 'Remote read-model and write-through.', icon: Database },
+] as const;
+
+/**
+ * Nested surfaces under a module's own path. A module with sub-routes is a hub:
+ * the sidebar still shows one entry, the sub-routes appear as tabs on the pages
+ * themselves, and the router and the href allowlist both build from this table.
+ *
+ * Wave 4 is the first module to need them, because the Content OS is a loop of
+ * surfaces rather than one list, and nine top-level nav rows for one module
+ * would be the fake-inventory problem the audit exists to prevent.
+ */
+export interface SubRouteDefinition {
+  id: string;
+  moduleId: string;
+  /** Static path beneath the module path. Never carries a parameter. */
+  path: string;
+  label: string;
+  summary: string;
+}
+
+export const subRoutes: readonly SubRouteDefinition[] = [
+  {
+    id: 'content-ideas',
+    moduleId: 'content',
+    path: '/content/ideas',
+    label: 'Idea Vault',
+    summary: 'Captured ideas, scored on reach, effort, and confidence.',
+  },
+  {
+    id: 'content-calendar',
+    moduleId: 'content',
+    path: '/content/calendar',
+    label: 'Publishing Calendar',
+    summary: 'One week of publish dates, and what carries no date at all.',
+  },
+  {
+    id: 'content-campaigns',
+    moduleId: 'content',
+    path: '/content/campaigns',
+    label: 'Campaigns',
+    summary: 'The arcs content belongs to, with their production counted.',
+  },
+  {
+    id: 'content-library',
+    moduleId: 'content',
+    path: '/content/library',
+    label: 'Library',
+    summary: 'Hooks, CTAs, assets, and templates behind one filter.',
+  },
+  {
+    id: 'content-analytics',
+    moduleId: 'content',
+    path: '/content/analytics',
+    label: 'Performance',
+    summary: 'Recorded readings, what they suggest, and how large the sample is.',
+  },
 ] as const;
 
 /**
@@ -198,6 +263,9 @@ export const recordRoutes: readonly RecordRouteDefinition[] = [
   { id: 'crm-person', moduleId: 'crm', pattern: '/crm/person/:id' },
   { id: 'crm-company', moduleId: 'crm', pattern: '/crm/company/:id' },
   { id: 'pipeline-opportunity', moduleId: 'pipeline', pattern: '/pipeline/opportunity/:id' },
+  // Under `/content/item/` rather than `/content/:id`, so a package id can never
+  // collide with — or be mistaken for — one of the hub's sub-routes.
+  { id: 'content-item', moduleId: 'content', pattern: '/content/item/:id' },
 ] as const;
 
 export function enabledModules(): ModuleDefinition[] {
@@ -210,6 +278,17 @@ export function enabledRecordRoutes(): RecordRouteDefinition[] {
   return recordRoutes.filter((route) => enabled.has(route.moduleId));
 }
 
+/** Sub-routes whose owning module is enabled. */
+export function enabledSubRoutes(): SubRouteDefinition[] {
+  const enabled = new Set(enabledModules().map((module) => module.id));
+  return subRoutes.filter((route) => enabled.has(route.moduleId));
+}
+
+/** The sub-routes of one module, in declaration order. Hub tabs read this. */
+export function subRoutesOf(moduleId: string): SubRouteDefinition[] {
+  return enabledSubRoutes().filter((route) => route.moduleId === moduleId);
+}
+
 export function plannedModules(): ModuleDefinition[] {
   return moduleRegistry
     .filter((module) => module.status === 'planned')
@@ -220,8 +299,16 @@ export function modulesByGroup(group: ModuleGroup): ModuleDefinition[] {
   return enabledModules().filter((module) => module.group === group);
 }
 
+/**
+ * The module a path belongs to: an exact match, or the module that owns the
+ * prefix, so a sub-route or a detail page is still named after its module.
+ */
 export function findModuleByPath(path: string): ModuleDefinition | undefined {
-  return moduleRegistry.find((module) => module.path === path);
+  const exact = moduleRegistry.find((module) => module.path === path);
+  if (exact) return exact;
+  return moduleRegistry
+    .filter((module) => module.path !== '/' && path.startsWith(`${module.path}/`))
+    .sort((a, b) => b.path.length - a.path.length)[0];
 }
 
 export const groupLabel: Record<ModuleGroup, string> = {

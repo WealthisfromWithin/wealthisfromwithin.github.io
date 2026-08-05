@@ -13,6 +13,31 @@ export const CalendarPage = lazy(() =>
 export const CompanyDetailPage = lazy(() =>
   import('@/modules/crm/CrmDetailPage').then((m) => ({ default: m.CompanyDetailPage })),
 );
+export const ContentPage = lazy(() =>
+  import('@/modules/content/ContentPage').then((m) => ({ default: m.ContentPage })),
+);
+export const ContentAnalyticsPage = lazy(() =>
+  import('@/modules/content/ContentAnalyticsPage').then((m) => ({
+    default: m.ContentAnalyticsPage,
+  })),
+);
+export const ContentCalendarPage = lazy(() =>
+  import('@/modules/content/ContentCalendarPage').then((m) => ({ default: m.ContentCalendarPage })),
+);
+export const ContentCampaignsPage = lazy(() =>
+  import('@/modules/content/ContentCampaignsPage').then((m) => ({
+    default: m.ContentCampaignsPage,
+  })),
+);
+export const ContentIdeasPage = lazy(() =>
+  import('@/modules/content/ContentIdeasPage').then((m) => ({ default: m.ContentIdeasPage })),
+);
+export const ContentItemPage = lazy(() =>
+  import('@/modules/content/ContentItemPage').then((m) => ({ default: m.ContentItemPage })),
+);
+export const ContentLibraryPage = lazy(() =>
+  import('@/modules/content/ContentLibraryPage').then((m) => ({ default: m.ContentLibraryPage })),
+);
 export const CrmPage = lazy(() =>
   import('@/modules/crm/CrmPage').then((m) => ({ default: m.CrmPage })),
 );

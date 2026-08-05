@@ -2,18 +2,23 @@ import { describe, expect, it } from 'vitest';
 import {
   enabledModules,
   enabledRecordRoutes,
+  enabledSubRoutes,
+  findModuleByPath,
   moduleRegistry,
   modulesByGroup,
   plannedModules,
   recordRoutes,
+  subRoutes,
+  subRoutesOf,
 } from './modules';
 import { routes } from './router';
 
-/** Wave 3 enables revenue, execution, and time; Wave 4+ stays hidden. */
-const WAVE_3_ENABLED = [
+/** Wave 4 adds the Content OS hub; Wave 5+ stays hidden. */
+const WAVE_4_ENABLED = [
   'approvals',
   'brief',
   'calendar',
+  'content',
   'crm',
   'health',
   'inbox',
@@ -30,8 +35,8 @@ function servedPaths(): string[] {
 }
 
 describe('module registry', () => {
-  it('enables exactly the Wave 1, Wave 2, and Wave 3 modules', () => {
-    expect(enabledModules().map((module) => module.id).sort()).toEqual(WAVE_3_ENABLED);
+  it('enables exactly the Wave 1 through Wave 4 modules', () => {
+    expect(enabledModules().map((module) => module.id).sort()).toEqual(WAVE_4_ENABLED);
   });
 
   it('splits the enabled modules across Commander and Operator', () => {
@@ -48,6 +53,7 @@ describe('module registry', () => {
       'projects',
       'calendar',
       'meetings',
+      'content',
       'integrations',
       'settings',
     ]);
@@ -62,10 +68,53 @@ describe('module registry', () => {
     }
   });
 
-  it('leaves every Wave 4+ module planned', () => {
+  it('leaves every Wave 5+ module planned', () => {
     for (const module of moduleRegistry) {
-      if (module.wave > 3) expect(module.status).toBe('planned');
+      if (module.wave > 4) expect({ id: module.id, status: module.status }).toEqual({
+        id: module.id,
+        status: 'planned',
+      });
     }
+  });
+
+  it('keeps the Content OS sub-routes out of the sidebar', () => {
+    const navigable = new Set(
+      [...modulesByGroup('commander'), ...modulesByGroup('operator')].map((module) => module.path),
+    );
+    expect(navigable.has('/content')).toBe(true);
+    for (const route of subRoutes) {
+      expect(navigable.has(route.path)).toBe(false);
+    }
+  });
+
+  it('declares every sub-route beneath a module that owns its prefix', () => {
+    const paths = new Map(moduleRegistry.map((module) => [module.id, module.path]));
+    for (const route of subRoutes) {
+      expect(route.path.startsWith(`${String(paths.get(route.moduleId))}/`)).toBe(true);
+      expect(route.path).not.toContain(':');
+    }
+    expect(new Set(subRoutes.map((route) => route.path)).size).toBe(subRoutes.length);
+  });
+
+  it('serves a sub-route only while its module is enabled', () => {
+    const enabled = new Set(enabledModules().map((module) => module.id));
+    for (const route of subRoutes) {
+      expect(enabledSubRoutes().includes(route)).toBe(enabled.has(route.moduleId));
+    }
+    expect(subRoutesOf('content').map((route) => route.path)).toEqual([
+      '/content/ideas',
+      '/content/calendar',
+      '/content/campaigns',
+      '/content/library',
+      '/content/analytics',
+    ]);
+  });
+
+  it('names a nested surface after the module that owns it', () => {
+    expect(findModuleByPath('/content/ideas')?.id).toBe('content');
+    expect(findModuleByPath('/content/item/c-constraint')?.id).toBe('content');
+    expect(findModuleByPath('/crm/person/p-aldridge')?.id).toBe('crm');
+    expect(findModuleByPath('/nowhere')).toBeUndefined();
   });
 
   it('leaves Mission Control planned: it is not one of the audit Wave 3 items', () => {
@@ -79,11 +128,12 @@ describe('module registry', () => {
     expect(new Set(paths).size).toBe(paths.length);
   });
 
-  it('routes exactly the enabled modules, their record routes, and a catch-all', () => {
+  it('routes exactly the enabled modules, their sub-routes and record routes, and a catch-all', () => {
     const expected = [
       ...enabledModules().map((module) =>
         module.path === '/' ? 'index' : module.path.replace(/^\//, ''),
       ),
+      ...enabledSubRoutes().map((route) => route.path.replace(/^\//, '')),
       ...enabledRecordRoutes().map((record) => record.pattern.replace(/^\//, '')),
       '*',
     ];
@@ -106,6 +156,7 @@ describe('module registry', () => {
       'crm-person',
       'crm-company',
       'pipeline-opportunity',
+      'content-item',
     ]);
   });
 

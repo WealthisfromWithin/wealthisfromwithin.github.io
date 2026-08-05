@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { isSafeInternalHref } from '@/app/href';
-import { enabledModules } from '@/app/modules';
+import { enabledModules, enabledSubRoutes } from '@/app/modules';
 import { buildCommands, commandGroupLabel, type Command } from './registry';
 
 function commands(navigate: (path: string) => void = () => undefined): Command[] {
@@ -24,7 +24,10 @@ describe('command registry', () => {
 
   it('never navigates to a route the router does not serve', () => {
     const paths: string[] = [];
-    const served = new Set(enabledModules().map((module) => module.path));
+    const served = new Set([
+      ...enabledModules().map((module) => module.path),
+      ...enabledSubRoutes().map((route) => route.path),
+    ]);
 
     for (const command of commands((path) => paths.push(path))) {
       void command.run();
@@ -76,6 +79,20 @@ describe('command registry', () => {
       'act:crm-dormant',
       'surface:calendar-week',
       'surface:meetings-notes',
+    ]) {
+      expect({ id, offered: ids.has(id) }).toEqual({ id, offered: true });
+    }
+  });
+
+  it('reaches the Wave 4 content surfaces', () => {
+    const ids = new Set(commands().map((command) => command.id));
+
+    for (const id of [
+      'navigate:content',
+      'act:content-review',
+      'act:content-due',
+      'surface:content-ideas',
+      'surface:content-learning',
     ]) {
       expect({ id, offered: ids.has(id) }).toEqual({ id, offered: true });
     }

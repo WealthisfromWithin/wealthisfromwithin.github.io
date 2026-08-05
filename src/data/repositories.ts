@@ -1,28 +1,15 @@
 import type { EntityTable, Table } from 'dexie';
 import { db, META_KEYS, type SovereignDb } from './db';
 import { buildDemoDataset, SEED_VERSION } from './seed';
-import { emptyDataset, type SovereignDataset } from './dataset';
+import { DATASET_KEYS, emptyDataset, type SovereignDataset } from './dataset';
 import type { DataSource } from '@/domain';
 import { DAY_MS } from '@/lib/clock';
 
 /** Demo timestamps go stale; refresh them so the brief keeps meaning something. */
 const SEED_MAX_AGE_MS = DAY_MS / 2;
 
-const DATASET_TABLES = [
-  'people',
-  'companies',
-  'tasks',
-  'projects',
-  'meetings',
-  'missions',
-  'approvals',
-  'opportunities',
-  'contentItems',
-  'notifications',
-  'events',
-  'metrics',
-  'integrations',
-] as const;
+/** One list: a dataset key and its Dexie table share a name by construction. */
+const DATASET_TABLES = DATASET_KEYS;
 
 type DatasetTable = (typeof DATASET_TABLES)[number];
 
@@ -39,51 +26,12 @@ function tableOf(database: SovereignDb, name: DatasetTable): EntityTable<BaseRow
 }
 
 export async function readDataset(database: SovereignDb = db): Promise<SovereignDataset> {
-  const [
-    people,
-    companies,
-    tasks,
-    projects,
-    meetings,
-    missions,
-    approvals,
-    opportunities,
-    contentItems,
-    notifications,
-    events,
-    metrics,
-    integrations,
-  ] = await Promise.all([
-    database.people.toArray(),
-    database.companies.toArray(),
-    database.tasks.toArray(),
-    database.projects.toArray(),
-    database.meetings.toArray(),
-    database.missions.toArray(),
-    database.approvals.toArray(),
-    database.opportunities.toArray(),
-    database.contentItems.toArray(),
-    database.notifications.toArray(),
-    database.events.toArray(),
-    database.metrics.toArray(),
-    database.integrations.toArray(),
-  ]);
-
-  return {
-    people,
-    companies,
-    tasks,
-    projects,
-    meetings,
-    missions,
-    approvals,
-    opportunities,
-    contentItems,
-    notifications,
-    events,
-    metrics,
-    integrations,
-  };
+  const entries = await Promise.all(
+    DATASET_TABLES.map(async (name) => [name, await tableOf(database, name).toArray()] as const),
+  );
+  // `tableOf` erases each table's row type down to the columns every row shares;
+  // the key it was read from is what restores it.
+  return Object.fromEntries(entries) as unknown as SovereignDataset;
 }
 
 async function readMeta(database: SovereignDb, key: string): Promise<string | undefined> {

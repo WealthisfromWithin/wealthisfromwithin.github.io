@@ -1,11 +1,18 @@
 import { Navigate, type RouteObject } from 'react-router-dom';
 import { AppShell } from './shell/AppShell';
-import { enabledModules, enabledRecordRoutes } from './modules';
+import { enabledModules, enabledRecordRoutes, enabledSubRoutes } from './modules';
 import { MorningBriefPage } from '@/modules/dashboard/MorningBriefPage';
 import {
   ApprovalsPage,
   CalendarPage,
   CompanyDetailPage,
+  ContentAnalyticsPage,
+  ContentCalendarPage,
+  ContentCampaignsPage,
+  ContentIdeasPage,
+  ContentItemPage,
+  ContentLibraryPage,
+  ContentPage,
   CrmPage,
   HealthPage,
   InboxPage,
@@ -35,8 +42,18 @@ const moduleElements: Record<string, RouteObject['element']> = {
   projects: <ProjectsPage />,
   calendar: <CalendarPage />,
   meetings: <MeetingsPage />,
+  content: <ContentPage />,
   integrations: <IntegrationsPage />,
   settings: <SettingsPage />,
+};
+
+/** Keyed by the sub-route id declared in the registry. */
+const subRouteElements: Record<string, RouteObject['element']> = {
+  'content-ideas': <ContentIdeasPage />,
+  'content-calendar': <ContentCalendarPage />,
+  'content-campaigns': <ContentCampaignsPage />,
+  'content-library': <ContentLibraryPage />,
+  'content-analytics': <ContentAnalyticsPage />,
 };
 
 /** Keyed by the record-route id declared in the registry. */
@@ -44,6 +61,7 @@ const recordElements: Record<string, RouteObject['element']> = {
   'crm-person': <PersonDetailPage />,
   'crm-company': <CompanyDetailPage />,
   'pipeline-opportunity': <OpportunityDetailPage />,
+  'content-item': <ContentItemPage />,
 };
 
 function buildModuleRoutes(): RouteObject[] {
@@ -55,6 +73,14 @@ function buildModuleRoutes(): RouteObject[] {
         ? { index: true, element }
         : { path: module.path.replace(/^\//, ''), element },
     ];
+  });
+}
+
+function buildSubRoutes(): RouteObject[] {
+  return enabledSubRoutes().flatMap((route) => {
+    const element = subRouteElements[route.id];
+    if (!element) return [];
+    return [{ path: route.path.replace(/^\//, ''), element }];
   });
 }
 
@@ -72,6 +98,7 @@ export const routes: RouteObject[] = [
     element: <AppShell />,
     children: [
       ...buildModuleRoutes(),
+      ...buildSubRoutes(),
       ...buildRecordRoutes(),
       { path: '*', element: <Navigate to="/" replace /> },
     ],

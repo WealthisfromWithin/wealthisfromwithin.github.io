@@ -1,9 +1,16 @@
 import type { SovereignDataset } from '@/data/dataset';
-import { normalizeInternalHref, opportunityHref } from '@/app/href';
+import { contentHref, normalizeInternalHref, opportunityHref } from '@/app/href';
 import { DAY_MS, formatClockTime } from '@/lib/clock';
 import { formatCurrencyCents, formatDelta, formatMetricValue } from '@/lib/format';
 import { countByState } from '@/integrations/state';
 import { dayAgenda } from '@/modules/calendar/calendar';
+import {
+  contentAwaitingApproval,
+  contentDueToday,
+  contentFormatLabel,
+  contentStatusLabel,
+} from '@/modules/content/content';
+import { contentLearningInsights } from '@/modules/content/learning';
 import {
   daysInStage,
   expectedValueCents,
@@ -82,9 +89,18 @@ function attentionSection(dataset: SovereignDataset, now: Date): BriefItem[] {
     });
   }
 
+  // A content gate is listed once, against the package it holds up, so the
+  // operator lands on the copy rather than on a queue row about the copy.
+  const contentGates = new Set(
+    dataset.contentItems
+      .filter((item) => item.status === 'in_review' && item.approvalId !== undefined)
+      .map((item) => item.approvalId),
+  );
+
   for (const approval of dataset.approvals) {
     // A decided gate is no longer demanding attention, whatever its risk.
     if (approval.status !== 'pending' || approval.risk === 'info') continue;
+    if (contentGates.has(approval.id)) continue;
     items.push({
       id: `approval:${approval.id}`,
       title: `Approval: ${approval.title}`,
@@ -93,6 +109,21 @@ function attentionSection(dataset: SovereignDataset, now: Date): BriefItem[] {
       tone: approval.risk === 'critical' ? 'critical' : 'warning',
       demo: isDemo(approval.source),
       href: '/approvals',
+    });
+  }
+
+  for (const item of contentAwaitingApproval(dataset)) {
+    items.push({
+      id: `content:${item.id}`,
+      title: `Approval: ${item.title}`,
+      detail:
+        item.approvalId === undefined
+          ? 'In review with no gate attached.'
+          : 'Customer-facing copy holding an open gate in the Approval Queue.',
+      meta: `${contentFormatLabel[item.format]}${item.channel.length > 0 ? ` · ${item.channel}` : ''}`,
+      tone: 'warning',
+      demo: isDemo(item.source),
+      href: contentHref(item.id),
     });
   }
 
@@ -202,6 +233,23 @@ function todaySection(dataset: SovereignDataset, now: Date): BriefItem[] {
     });
   }
 
+  // Content carries a publish date rather than a due date, so it is not on the
+  // calendar's agenda; today's plan is incomplete without it.
+  for (const item of contentDueToday(dataset, now)) {
+    items.push({
+      id: `content:${item.id}`,
+      title: `${formatClockTime(new Date(item.scheduledFor ?? ''))} ${item.title}`,
+      detail:
+        item.status === 'scheduled' || item.status === 'approved'
+          ? 'Due to publish today. Publishing is recorded by hand.'
+          : `Dated today and still ${contentStatusLabel[item.status].toLowerCase()}.`,
+      meta: `${contentFormatLabel[item.format]}${item.channel.length > 0 ? ` · ${item.channel}` : ''}`,
+      tone: item.status === 'scheduled' || item.status === 'approved' ? 'info' : 'neutral',
+      demo: isDemo(item.source),
+      href: contentHref(item.id),
+    });
+  }
+
   // Meetings and dated work in clock order, then undated work in flight.
   return items;
 }
@@ -278,6 +326,7 @@ function blockedSection(dataset: SovereignDataset): BriefItem[] {
       meta: item.channel,
       tone: 'warning',
       demo: isDemo(item.source),
+      href: contentHref(item.id),
     });
   }
 
@@ -285,7 +334,7 @@ function blockedSection(dataset: SovereignDataset): BriefItem[] {
 }
 
 function leverageSection(dataset: SovereignDataset): BriefItem[] {
-  return [...dataset.metrics]
+  const items: BriefItem[] = [...dataset.metrics]
     .sort((a, b) => Math.abs(b.deltaPercent) - Math.abs(a.deltaPercent))
     .map((metric) => ({
       id: `metric:${metric.id}`,
@@ -295,6 +344,23 @@ function leverageSection(dataset: SovereignDataset): BriefItem[] {
       tone: metric.deltaPercent > 0 ? 'info' : metric.deltaPercent < 0 ? 'warning' : 'neutral',
       demo: isDemo(metric.source),
     }));
+
+  // One learning insight, counted from recorded readings. It leads the section
+  // because it is the only line here derived from outcomes rather than inputs.
+  const [insight] = contentLearningInsights(dataset);
+  if (insight) {
+    items.unshift({
+      id: insight.id,
+      title: insight.headline,
+      detail: insight.detail,
+      meta: insight.evidence,
+      tone: 'info',
+      demo: dataset.contentMetrics.some((metric) => metric.source === 'demo'),
+      href: '/content/analytics',
+    });
+  }
+
+  return items;
 }
 
 /**

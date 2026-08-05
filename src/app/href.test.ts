@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { enabledModules } from './modules';
+import { enabledModules, enabledSubRoutes } from './modules';
 import {
   companyHref,
+  contentHref,
   isSafeInternalHref,
   normalizeInternalHref,
   opportunityHref,
@@ -12,6 +13,15 @@ describe('isSafeInternalHref', () => {
   it('allows every enabled module path', () => {
     for (const module of enabledModules()) {
       expect(isSafeInternalHref(module.path)).toBe(true);
+    }
+  });
+
+  it('allows every enabled sub-route path', () => {
+    for (const route of enabledSubRoutes()) {
+      expect({ path: route.path, safe: isSafeInternalHref(route.path) }).toEqual({
+        path: route.path,
+        safe: true,
+      });
     }
   });
 
@@ -27,12 +37,28 @@ describe('isSafeInternalHref', () => {
     expect(isSafeInternalHref('/projects?status=all')).toBe(true);
     expect(isSafeInternalHref('/calendar?week=next')).toBe(true);
     expect(isSafeInternalHref('/meetings?when=past')).toBe(true);
+    expect(isSafeInternalHref('/content?status=in_review')).toBe(true);
+    expect(isSafeInternalHref('/content?status=scheduled&format=video')).toBe(true);
+    expect(isSafeInternalHref('/content/ideas?status=all')).toBe(true);
+    expect(isSafeInternalHref('/content/calendar?week=next')).toBe(true);
+    expect(isSafeInternalHref('/content/library?type=ctas')).toBe(true);
   });
 
   it('allows the declared record detail routes', () => {
     expect(isSafeInternalHref('/crm/person/p-aldridge')).toBe(true);
     expect(isSafeInternalHref('/crm/company/co-truoak')).toBe(true);
     expect(isSafeInternalHref('/pipeline/opportunity/opp-truoak')).toBe(true);
+    expect(isSafeInternalHref('/content/item/c-constraint')).toBe(true);
+  });
+
+  it('keeps the content hub sub-routes and its detail route apart', () => {
+    // `/content/item/:id` rather than `/content/:id`, so no package id can be
+    // read as a sub-route and no sub-route can be read as a package.
+    expect(isSafeInternalHref('/content/analytics')).toBe(true);
+    expect(isSafeInternalHref('/content/c-constraint')).toBe(false);
+    expect(isSafeInternalHref('/content/item/ideas/../../etc')).toBe(false);
+    expect(isSafeInternalHref('/content/item/')).toBe(false);
+    expect(isSafeInternalHref('/content/item/c-constraint?override=true')).toBe(false);
   });
 
   it('rejects a record route with no id, a nested id, or an unsafe id', () => {
@@ -55,6 +81,12 @@ describe('isSafeInternalHref', () => {
     expect(isSafeInternalHref('/tasks/t-brief-truoak')).toBe(false);
     expect(isSafeInternalHref('/inbox/n-truoak')).toBe(false);
     expect(isSafeInternalHref('/crm/mission/msn-042')).toBe(false);
+  });
+
+  it('rejects a path that only becomes legal after traversal is collapsed', () => {
+    expect(isSafeInternalHref('/content/item/../ideas')).toBe(false);
+    expect(isSafeInternalHref('/crm/person/../../inbox')).toBe(false);
+    expect(isSafeInternalHref('/tasks/../inbox')).toBe(false);
   });
 
   it('rejects unknown query params on an otherwise enabled route', () => {
@@ -91,8 +123,8 @@ describe('isSafeInternalHref', () => {
 
   it('rejects planned-module paths', () => {
     expect(isSafeInternalHref('/missions')).toBe(false);
-    expect(isSafeInternalHref('/content')).toBe(false);
     expect(isSafeInternalHref('/knowledge')).toBe(false);
+    expect(isSafeInternalHref('/research')).toBe(false);
     expect(isSafeInternalHref('/metrics')).toBe(false);
     expect(isSafeInternalHref('/sync')).toBe(false);
   });
@@ -127,7 +159,7 @@ describe('normalizeInternalHref', () => {
     expect(normalizeInternalHref('javascript:alert(1)', '/inbox')).toBe('/inbox');
     expect(normalizeInternalHref('https://evil.example', '/approvals')).toBe('/approvals');
     expect(normalizeInternalHref('//evil.example', '/')).toBe('/');
-    expect(normalizeInternalHref('/content', '/inbox')).toBe('/inbox');
+    expect(normalizeInternalHref('/knowledge', '/inbox')).toBe('/inbox');
   });
 });
 
@@ -136,6 +168,7 @@ describe('record link builders', () => {
     expect(personHref('p-aldridge')).toBe('/crm/person/p-aldridge');
     expect(companyHref('co-truoak')).toBe('/crm/company/co-truoak');
     expect(opportunityHref('opp-truoak')).toBe('/pipeline/opportunity/opp-truoak');
+    expect(contentHref('c-constraint')).toBe('/content/item/c-constraint');
   });
 
   it('degrades to the module list rather than emitting an unsafe link', () => {
@@ -143,10 +176,17 @@ describe('record link builders', () => {
     expect(personHref('')).toBe('/crm');
     expect(companyHref('co truoak?x=1')).toBe('/crm?view=companies');
     expect(opportunityHref('javascript:alert(1)')).toBe('/pipeline');
+    expect(contentHref('../ideas')).toBe('/content');
+    expect(contentHref('')).toBe('/content');
   });
 
   it('emits only hrefs the allowlist accepts', () => {
-    for (const href of [personHref('p-1'), companyHref('co-1'), opportunityHref('opp-1')]) {
+    for (const href of [
+      personHref('p-1'),
+      companyHref('co-1'),
+      opportunityHref('opp-1'),
+      contentHref('c-1'),
+    ]) {
       expect(isSafeInternalHref(href)).toBe(true);
     }
   });

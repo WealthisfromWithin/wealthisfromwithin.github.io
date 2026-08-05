@@ -1,6 +1,12 @@
 import type { SovereignDataset } from '@/data/dataset';
-import { companyHref, opportunityHref, personHref } from '@/app/href';
+import { companyHref, contentHref, opportunityHref, personHref } from '@/app/href';
 import { formatCurrencyCents } from '@/lib/format';
+import {
+  contentFormatLabel,
+  contentStatusLabel,
+  ideaScore,
+  ideaStatusLabel,
+} from '@/modules/content/content';
 import { meetingKindLabel } from '@/modules/meetings/meetings';
 import { pipelineStageLabel } from '@/modules/pipeline/pipeline';
 import { projectStatusLabel } from '@/modules/projects/projects';
@@ -16,6 +22,12 @@ export type SearchKind =
   | 'mission'
   | 'opportunity'
   | 'content'
+  | 'idea'
+  | 'campaign'
+  | 'hook'
+  | 'cta'
+  | 'asset'
+  | 'template'
   | 'integration'
   | 'notification'
   | 'approval';
@@ -39,6 +51,12 @@ export const searchKindLabel: Record<SearchKind, string> = {
   mission: 'Mission',
   opportunity: 'Opportunity',
   content: 'Content',
+  idea: 'Idea',
+  campaign: 'Campaign',
+  hook: 'Hook',
+  cta: 'CTA',
+  asset: 'Asset',
+  template: 'Template',
   integration: 'Integration',
   notification: 'Signal',
   approval: 'Approval',
@@ -149,10 +167,84 @@ export function buildSearchIndex(dataset: SovereignDataset): SearchDocument[] {
       id: `content:${item.id}`,
       kind: 'content',
       title: item.title,
-      subtitle: `${item.status} · ${item.channel}`,
-      keywords: [item.blockedReason ?? ''],
-      route: '/',
+      subtitle: [contentStatusLabel[item.status], contentFormatLabel[item.format], item.channel]
+        .filter((part) => part.length > 0)
+        .join(' · '),
+      keywords: [item.body, item.videoScript, item.blockedReason ?? '', ...item.tags],
+      route: contentHref(item.id),
       demo: item.source === 'demo',
+    });
+  }
+
+  for (const idea of dataset.contentIdeas) {
+    documents.push({
+      id: `idea:${idea.id}`,
+      kind: 'idea',
+      title: idea.title,
+      subtitle: `${ideaStatusLabel[idea.status]} · score ${ideaScore(idea).toFixed(1)}`,
+      keywords: [idea.summary, idea.origin, ...idea.tags],
+      route: idea.status === 'captured' ? '/content/ideas' : '/content/ideas?status=all',
+      demo: idea.source === 'demo',
+    });
+  }
+
+  for (const campaign of dataset.campaigns) {
+    documents.push({
+      id: `campaign:${campaign.id}`,
+      kind: 'campaign',
+      title: campaign.name,
+      subtitle: campaign.status,
+      keywords: [campaign.objective, campaign.goal],
+      route: '/content/campaigns',
+      demo: campaign.source === 'demo',
+    });
+  }
+
+  for (const hook of dataset.hooks) {
+    documents.push({
+      id: `hook:${hook.id}`,
+      kind: 'hook',
+      title: hook.text,
+      subtitle: `${hook.style} hook`,
+      keywords: [hook.notes],
+      route: '/content/library',
+      demo: hook.source === 'demo',
+    });
+  }
+
+  for (const cta of dataset.ctas) {
+    documents.push({
+      id: `cta:${cta.id}`,
+      kind: 'cta',
+      title: cta.text,
+      subtitle: cta.intent.replace('_', ' '),
+      keywords: [cta.notes, cta.destination],
+      route: '/content/library?type=ctas',
+      demo: cta.source === 'demo',
+    });
+  }
+
+  for (const asset of dataset.contentAssets) {
+    documents.push({
+      id: `asset:${asset.id}`,
+      kind: 'asset',
+      title: asset.title,
+      subtitle: asset.kind,
+      keywords: [asset.notes, asset.location, ...asset.tags],
+      route: '/content/library?type=assets',
+      demo: asset.source === 'demo',
+    });
+  }
+
+  for (const template of dataset.contentTemplates) {
+    documents.push({
+      id: `template:${template.id}`,
+      kind: 'template',
+      title: template.title,
+      subtitle: contentFormatLabel[template.format],
+      keywords: [template.structure, template.whenToUse],
+      route: '/content/library?type=templates',
+      demo: template.source === 'demo',
     });
   }
 

@@ -1,5 +1,11 @@
 import { INTEGRATION_STATES } from '@/integrations/state';
 import { APPROVAL_FILTERS } from '@/modules/approvals/queue';
+import {
+  CONTENT_FORMAT_FILTERS,
+  CONTENT_STATUS_FILTERS,
+  IDEA_FILTERS,
+  LIBRARY_TYPES,
+} from '@/modules/content/content';
 import { CRM_TEMPERATURES, CRM_VIEWS } from '@/modules/crm/crm';
 import { CALENDAR_WEEKS } from '@/modules/calendar/calendar';
 import { INBOX_SEVERITY_FILTERS, INBOX_STATUS_FILTERS } from '@/modules/inbox/notifications';
@@ -7,7 +13,7 @@ import { MEETING_WINDOWS } from '@/modules/meetings/meetings';
 import { PIPELINE_STAGE_FILTERS } from '@/modules/pipeline/pipeline';
 import { PROJECT_FILTERS } from '@/modules/projects/projects';
 import { TASK_PRIORITY_FILTERS, TASK_STATUS_FILTERS } from '@/modules/tasks/tasks';
-import { enabledModules, enabledRecordRoutes } from './modules';
+import { enabledModules, enabledRecordRoutes, enabledSubRoutes } from './modules';
 
 /**
  * The only query parameters an enabled route is allowed to carry, and the
@@ -45,6 +51,19 @@ const ALLOWED_QUERY_PARAMS: Record<string, Record<string, readonly string[]>> = 
   '/meetings': {
     when: MEETING_WINDOWS,
   },
+  '/content': {
+    status: CONTENT_STATUS_FILTERS,
+    format: CONTENT_FORMAT_FILTERS,
+  },
+  '/content/ideas': {
+    status: IDEA_FILTERS,
+  },
+  '/content/calendar': {
+    week: CALENDAR_WEEKS,
+  },
+  '/content/library': {
+    type: LIBRARY_TYPES,
+  },
 };
 
 /**
@@ -54,8 +73,12 @@ const ALLOWED_QUERY_PARAMS: Record<string, Record<string, readonly string[]>> = 
  */
 const RECORD_ID = /^[a-z0-9][a-z0-9-]*$/;
 
+/** Module paths and the sub-routes of enabled modules: the static route surface. */
 function enabledPaths(): Set<string> {
-  return new Set(enabledModules().map((module) => module.path));
+  return new Set([
+    ...enabledModules().map((module) => module.path),
+    ...enabledSubRoutes().map((route) => route.path),
+  ]);
 }
 
 /** True when `pathname` is an enabled record detail route with a legal id. */
@@ -98,6 +121,11 @@ export function isSafeInternalHref(href: string): boolean {
   // The base origin must survive parsing untouched; a route that manages to
   // smuggle a different host or scheme through is not internal.
   if (parsed.origin !== 'https://internal.invalid') return false;
+
+  // The path must be written as it resolves. A href that only becomes legal
+  // after `..` is collapsed is refused rather than quietly followed, so what a
+  // link says and where it goes are the same thing.
+  if (parsed.pathname !== (trimmed.split(/[?#]/)[0] ?? '')) return false;
 
   const isModulePath = enabledPaths().has(parsed.pathname);
   if (!isModulePath && !matchesRecordRoute(parsed.pathname)) return false;
@@ -145,4 +173,8 @@ export function companyHref(id: string): string {
 
 export function opportunityHref(id: string): string {
   return recordHref('pipeline-opportunity', id, '/pipeline');
+}
+
+export function contentHref(id: string): string {
+  return recordHref('content-item', id, '/content');
 }

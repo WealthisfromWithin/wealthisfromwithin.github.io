@@ -1,8 +1,15 @@
 import type {
   ActivityEvent,
   Approval,
+  Campaign,
   Company,
+  ContentAsset,
+  ContentIdea,
   ContentItem,
+  ContentMetric,
+  ContentTemplate,
+  Cta,
+  Hook,
   Integration,
   LeverageMetric,
   Meeting,
@@ -25,6 +32,13 @@ export interface SovereignDataset {
   approvals: Approval[];
   opportunities: Opportunity[];
   contentItems: ContentItem[];
+  contentIdeas: ContentIdea[];
+  campaigns: Campaign[];
+  contentAssets: ContentAsset[];
+  contentTemplates: ContentTemplate[];
+  hooks: Hook[];
+  ctas: Cta[];
+  contentMetrics: ContentMetric[];
   notifications: Notification[];
   events: ActivityEvent[];
   metrics: LeverageMetric[];
@@ -41,6 +55,13 @@ export const DATASET_KEYS = [
   'approvals',
   'opportunities',
   'contentItems',
+  'contentIdeas',
+  'campaigns',
+  'contentAssets',
+  'contentTemplates',
+  'hooks',
+  'ctas',
+  'contentMetrics',
   'notifications',
   'events',
   'metrics',
@@ -57,6 +78,13 @@ export const emptyDataset: SovereignDataset = {
   approvals: [],
   opportunities: [],
   contentItems: [],
+  contentIdeas: [],
+  campaigns: [],
+  contentAssets: [],
+  contentTemplates: [],
+  hooks: [],
+  ctas: [],
+  contentMetrics: [],
   notifications: [],
   events: [],
   metrics: [],

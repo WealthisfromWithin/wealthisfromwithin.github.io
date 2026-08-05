@@ -5,7 +5,7 @@ import { RouterProvider, createMemoryRouter } from 'react-router-dom';
 import { db } from '@/data/db';
 import { ensureSeeded, resetLocalStore } from '@/data/repositories';
 import { AppProviders } from './providers';
-import { enabledModules, enabledRecordRoutes } from './modules';
+import { enabledModules, enabledRecordRoutes, enabledSubRoutes } from './modules';
 import { routes } from './router';
 
 /** One real id per record route, so the detail page has something to render. */
@@ -13,6 +13,7 @@ const RECORD_IDS: Record<string, string> = {
   'crm-person': 'p-aldridge',
   'crm-company': 'co-truoak',
   'pipeline-opportunity': 'opp-truoak',
+  'content-item': 'c-constraint',
 };
 
 function renderAt(path: string) {
@@ -48,6 +49,15 @@ describe('router', () => {
     },
   );
 
+  it.each(enabledSubRoutes().map((route) => [route.path, route.label] as const))(
+    'resolves the lazy chunk behind the %s sub-route',
+    async (path, label) => {
+      renderAt(path);
+
+      expect(within(await page()).getByRole('heading', { level: 1, name: label })).toBeDefined();
+    },
+  );
+
   it.each(enabledRecordRoutes().map((record) => [record.id, record.pattern] as const))(
     'resolves the lazy chunk behind the %s detail route',
     async (id, pattern) => {
@@ -60,7 +70,7 @@ describe('router', () => {
   );
 
   it('sends an unrouted path back to the brief rather than a coming-soon page', async () => {
-    renderAt('/content');
+    renderAt('/knowledge');
 
     expect(
       within(await page()).getByRole('heading', { level: 1, name: 'Morning Brief' }),

@@ -158,24 +158,217 @@ export type Opportunity = z.infer<typeof opportunitySchema>;
 
 /* ── Content ────────────────────────────────────────────────────────────── */
 
+/**
+ * The production loop, in the order work moves through it, plus the two states
+ * that leave it: `archived` (retired deliberately) and `blocked` (cannot move,
+ * with the reason on the record). Wave 1's `review` became `in_review` to match
+ * the ContentDone gate vocabulary; Dexie version 4 migrates the old rows.
+ */
 export const contentStatusSchema = z.enum([
   'idea',
   'drafting',
-  'review',
+  'in_review',
+  'approved',
   'scheduled',
   'published',
+  'archived',
   'blocked',
 ]);
 export type ContentStatus = z.infer<typeof contentStatusSchema>;
 
+/**
+ * The legal moves through the loop. Doctrine, not presentation: the write path
+ * refuses anything not listed here, and the UI only offers what it lists.
+ * Nothing reaches `published` except from a state where the copy was approved,
+ * and reaching it is always an operator recording a publish — no connector on
+ * this surface can confirm that a post went out.
+ */
+export const CONTENT_TRANSITIONS: Record<ContentStatus, readonly ContentStatus[]> = {
+  idea: ['drafting', 'archived'],
+  drafting: ['in_review', 'idea', 'blocked', 'archived'],
+  in_review: ['approved', 'drafting', 'blocked', 'archived'],
+  approved: ['scheduled', 'published', 'drafting', 'archived'],
+  scheduled: ['published', 'approved', 'blocked', 'archived'],
+  published: ['archived'],
+  blocked: ['drafting', 'archived'],
+  archived: ['drafting'],
+};
+
+export function canTransitionContent(from: ContentStatus, to: ContentStatus): boolean {
+  return CONTENT_TRANSITIONS[from].includes(to);
+}
+
+export const contentFormatSchema = z.enum([
+  'post',
+  'article',
+  'newsletter',
+  'video',
+  'short',
+  'carousel',
+  'email',
+]);
+export type ContentFormat = z.infer<typeof contentFormatSchema>;
+
+/** Destinations the domain knows. None of them is reachable from this bundle. */
+export const contentPlatformSchema = z.enum([
+  'linkedin',
+  'facebook',
+  'youtube',
+  'newsletter',
+  'blog',
+  'x',
+]);
+export type ContentPlatform = z.infer<typeof contentPlatformSchema>;
+
+/**
+ * Per-platform copy for one package. Embedded on the item rather than stored
+ * separately: a variant has no life of its own and is always read with its parent.
+ */
+export const platformVariantSchema = z.object({
+  platform: contentPlatformSchema,
+  body: z.string().default(''),
+  hookId: idSchema.optional(),
+  ctaId: idSchema.optional(),
+  /** Operator-recorded publish. No social API has ever confirmed anything here. */
+  publishedAt: isoTimestamp.optional(),
+});
+export type PlatformVariant = z.infer<typeof platformVariantSchema>;
+
 export const contentItemSchema = recordBase.extend({
   title: z.string().min(1),
   status: contentStatusSchema,
+  format: contentFormatSchema.default('post'),
+  /** Free-text channel kept from Wave 1; `platform` is the typed destination. */
   channel: z.string().default(''),
+  platform: contentPlatformSchema.optional(),
+  /** The publish date. One date field, whether the item is scheduled or shipped. */
   scheduledFor: isoTimestamp.optional(),
+  publishedAt: isoTimestamp.optional(),
   blockedReason: z.string().optional(),
+  body: z.string().default(''),
+  ideaId: idSchema.optional(),
+  campaignId: idSchema.optional(),
+  /** Repurposing: a cut-down points at the package it came from. */
+  parentId: idSchema.optional(),
+  templateId: idSchema.optional(),
+  hookId: idSchema.optional(),
+  ctaId: idSchema.optional(),
+  assetIds: z.array(idSchema).default([]),
+  variants: z.array(platformVariantSchema).default([]),
+  /** Video tracking lives on the item: a script and a runtime, not a second entity. */
+  videoScript: z.string().default(''),
+  durationSeconds: z.number().int().positive().optional(),
+  /** The Approval Queue gate opened when this item was submitted for review. */
+  approvalId: idSchema.optional(),
+  complianceCheckedAt: isoTimestamp.optional(),
+  complianceSummary: z.string().default(''),
+  tags: z.array(z.string()).default([]),
 });
 export type ContentItem = z.infer<typeof contentItemSchema>;
+
+export const contentIdeaStatusSchema = z.enum(['captured', 'promoted', 'parked', 'discarded']);
+export type ContentIdeaStatus = z.infer<typeof contentIdeaStatusSchema>;
+
+/**
+ * Scores are the operator's own 1–5 judgement, not a model output. The vault
+ * ranks on them arithmetically and says so.
+ */
+const ideaScoreField = z.number().int().min(1).max(5);
+
+export const contentIdeaSchema = recordBase.extend({
+  title: z.string().min(1),
+  summary: z.string().default(''),
+  status: contentIdeaStatusSchema.default('captured'),
+  reach: ideaScoreField.default(3),
+  effort: ideaScoreField.default(3),
+  confidence: ideaScoreField.default(3),
+  origin: z.string().default(''),
+  tags: z.array(z.string()).default([]),
+  campaignId: idSchema.optional(),
+  /** Set when the idea became a draft, so the vault stops offering it twice. */
+  promotedItemId: idSchema.optional(),
+});
+export type ContentIdea = z.infer<typeof contentIdeaSchema>;
+
+export const campaignStatusSchema = z.enum(['planning', 'active', 'complete', 'archived']);
+export type CampaignStatus = z.infer<typeof campaignStatusSchema>;
+
+export const campaignSchema = recordBase.extend({
+  name: z.string().min(1),
+  objective: z.string().default(''),
+  status: campaignStatusSchema,
+  startAt: isoTimestamp.optional(),
+  endAt: isoTimestamp.optional(),
+  /** What the campaign is for, in the operator's words. Not a target number. */
+  goal: z.string().default(''),
+});
+export type Campaign = z.infer<typeof campaignSchema>;
+
+export const contentAssetKindSchema = z.enum(['image', 'video', 'document', 'link', 'audio']);
+export type ContentAssetKind = z.infer<typeof contentAssetKindSchema>;
+
+export const contentAssetSchema = recordBase.extend({
+  title: z.string().min(1),
+  kind: contentAssetKindSchema,
+  /** Where the file lives. Metadata only — nothing is uploaded or hosted here. */
+  location: z.string().default(''),
+  notes: z.string().default(''),
+  tags: z.array(z.string()).default([]),
+});
+export type ContentAsset = z.infer<typeof contentAssetSchema>;
+
+export const contentTemplateSchema = recordBase.extend({
+  title: z.string().min(1),
+  format: contentFormatSchema,
+  structure: z.string().default(''),
+  whenToUse: z.string().default(''),
+});
+export type ContentTemplate = z.infer<typeof contentTemplateSchema>;
+
+export const hookStyleSchema = z.enum(['question', 'contrarian', 'story', 'statistic', 'promise']);
+export type HookStyle = z.infer<typeof hookStyleSchema>;
+
+export const hookSchema = recordBase.extend({
+  text: z.string().min(1),
+  style: hookStyleSchema,
+  notes: z.string().default(''),
+  platform: contentPlatformSchema.optional(),
+});
+export type Hook = z.infer<typeof hookSchema>;
+
+export const ctaIntentSchema = z.enum([
+  'book_call',
+  'subscribe',
+  'reply',
+  'download',
+  'share',
+  'follow',
+]);
+export type CtaIntent = z.infer<typeof ctaIntentSchema>;
+
+export const ctaSchema = recordBase.extend({
+  text: z.string().min(1),
+  intent: ctaIntentSchema,
+  destination: z.string().default(''),
+  notes: z.string().default(''),
+});
+export type Cta = z.infer<typeof ctaSchema>;
+
+/**
+ * One reading of one item's performance on one platform. Recorded by hand or
+ * seeded; there is no analytics connector, so `method` says how it got here.
+ */
+export const contentMetricSchema = recordBase.extend({
+  contentItemId: idSchema,
+  platform: contentPlatformSchema,
+  capturedAt: isoTimestamp,
+  impressions: z.number().int().nonnegative(),
+  engagements: z.number().int().nonnegative(),
+  clicks: z.number().int().nonnegative().default(0),
+  conversions: z.number().int().nonnegative().default(0),
+  method: z.enum(['manual', 'seed']).default('manual'),
+});
+export type ContentMetric = z.infer<typeof contentMetricSchema>;
 
 /* ── Signals ────────────────────────────────────────────────────────────── */
 
