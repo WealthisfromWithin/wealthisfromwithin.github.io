@@ -114,18 +114,29 @@ Wave 6's review (L1) flagged that `connected` was *defined* as "verified by a
 health probe" and *enforced* by nothing. It was a convention, and conventions
 fail silently.
 
-It is now enforced twice:
+It is now enforced three ways:
 
 - **Write** — `recordIntegrationProbe` is the only writer that can set
   `connected`, and it refuses a result whose timestamp is missing or unparseable.
 - **Read** — `effectiveIntegrationState` downgrades any unevidenced `connected`
   claim to `awaiting_credentials` at every consumer: registry, MCP panel, Health
-  Monitor, state counts, blocked capabilities, search index.
+  Monitor counts and substrate pills, the content publishing panel, state counts,
+  blocked capabilities, search index.
+- **Gate** — `automationReadiness` asks `isUsable`, so an unevidenced claim
+  cannot make a rule runnable and `runAutomation` refuses it with the reason
+  recorded.
 
 Both halves matter. The writer governs what is written from now on; the read-time
 downgrade governs rows already in an operator's browser and rows a hand-edited
 IndexedDB could contain — and IndexedDB **is** editable by hand from devtools,
 which is exactly why a write-side check alone would have been insufficient.
+
+The gate is the half Wave 7 shipped incomplete. The downgrade existed, but four
+modules still read `integration.state` directly, and one of them decided whether
+an automation could write. Since a bypass reads perfectly naturally, the
+invariant is now also enforced against the source:
+`src/integrations/invariant.test.ts` fails the build if any module outside
+`src/domain/integrations.ts` reads the stored field.
 
 Enforcing it as a schema refinement was considered and rejected: a stored row
 failing validation would lock an operator out of their own store, hiding the
@@ -145,6 +156,13 @@ Both refuse *without sending anything*, not even a probe. The probe itself sends
 `credentials: 'omit'` and no headers, and only the **host** is ever printed in
 the UI — never the full URL, precisely because a misconfigured value may carry
 userinfo.
+
+Both rules live in `src/lib/endpoints.ts`, and the CSP builder asks the same two
+functions. A refused value therefore produces **no `connect-src` entry**: the
+policy cannot grant a destination the adapter would not call. Wave 7 originally
+had the CSP re-derive origins with a looser check of its own, which meant a
+misconfigured build could widen `connect-src` for an origin nothing in the app
+would ever request — an exfiltration destination granted for nothing.
 
 ## Mandatory controls — status
 

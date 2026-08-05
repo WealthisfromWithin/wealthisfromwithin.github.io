@@ -25,12 +25,21 @@ had never been tested.
 | Side | Mechanism |
 |------|-----------|
 | **Write** | `recordIntegrationProbe` is the only writer that can set `connected`. It refuses a result whose timestamp is missing or unparseable, refuses a row that is deliberately `disabled`, and records `lastProbedAt` on failure as well as success |
-| **Read** | `effectiveIntegrationState` downgrades any row claiming `connected` without a probe to `awaiting_credentials`, at every consumer: the registry page, the MCP panel, the Health Monitor, `countByState`, `isUsable`, blocked capabilities, and the search index |
+| **Read** | `effectiveIntegrationState` downgrades any row claiming `connected` without a probe to `awaiting_credentials`, at every consumer: the registry page, the MCP panel, the Health Monitor (counts *and* substrate pills), the content publishing panel, `countByState`, `isUsable`, `deriveSubstrateHealth`, blocked capabilities, and the search index |
+| **Gate** | `automationReadiness` asks `isUsable`, so a rule naming a connector cannot run — and `runAutomation` cannot write — from a row with no probe behind it |
 
 Both halves are load-bearing. The writer governs rows written from now on. The
 read-time downgrade governs rows already sitting in an operator's browser — and
 IndexedDB is hand-editable from devtools, so a write-side check alone would not
 have been an invariant.
+
+The downgrade lives in `src/domain/integrations.ts` — in the domain, because
+readiness and action gating are domain decisions and a helper the domain cannot
+import is a helper the domain works around. `src/integrations/state.ts`
+re-exports it. `src/integrations/invariant.test.ts` scans the source tree and
+fails the build if any module outside that one reads `integration.state`
+directly, which is how the Wave 7 review found four bypasses that no reviewer
+had noticed.
 
 ## Current state — 29 connectors
 

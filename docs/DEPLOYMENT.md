@@ -135,9 +135,16 @@ object-src 'none'; frame-src 'none'; form-action 'none'
 | `connect-src` | `'self'` in the public build. A build configuring `VITE_API_BASE_URL` or `VITE_LOCAL_AI_URL` gets those **origins** added — origin only, never a path, because CSP matches path prefixes loosely and a policy naming a path looks narrower than it is |
 | `frame-ancestors` | **Emitted only in the header form.** Browsers ignore it in a meta tag, so clickjacking protection on Pages is *absent*, not partial. See [`OPERATIONS.md`](./OPERATIONS.md) §6 |
 
-`connect-src` is derived from the same variables the adapters read, so the
-policy and the code cannot disagree: a build that configures a Command API can
-reach it, and a build that does not, cannot.
+`connect-src` is derived from the same variables the adapters read **and decided
+by the same acceptance function** — `acceptApiBaseUrl` and
+`acceptLoopbackEndpoint` in `src/lib/endpoints.ts`, which `resolveApiBaseUrl`
+and `resolveLocalEndpoint` also call. So the policy and the code cannot
+disagree: a build that configures a Command API can reach it, a build that does
+not, cannot, and **a build that configures a value an adapter refuses gets no
+connect source at all**. A misconfigured `VITE_API_BASE_URL` — plaintext
+`http:` on a public host, userinfo, a query string hiding a key — widens nothing.
+`src/lib/csp.test.ts` asserts each refused value against both the adapter and
+the policy in the same case.
 
 ---
 

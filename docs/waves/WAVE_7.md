@@ -4,7 +4,7 @@
 **Plan:** `docs/IMPLEMENTATION_PLAN_WAVE_7.md`
 **Architecture:** `ARCHITECTURE_AUDIT.md` §7 Wave 7, Phase 17 doc list
 **Predecessor:** `docs/waves/WAVE_6.md` (G3 PASS after the M1 fix pack)
-**Status:** complete — awaiting G2 review
+**Status:** complete — fix pack applied for G3 H1 + H2 (see the last section)
 
 ---
 
@@ -297,10 +297,12 @@ The threat this is actually aimed at is **exfiltration, not XSS** — which was
 already low, since nothing renders raw HTML. `connect-src 'self'` means a
 compromised dependency has nowhere to send to.
 
-`connect-src` is derived from the same `VITE_*` variables the adapters read, so
+`connect-src` is derived from the same `VITE_*` variables the adapters read
+**and run through the same acceptance function** (`src/lib/endpoints.ts`), so
 the policy and the code cannot disagree. Origins only, never paths, because CSP
 matches path prefixes loosely and a policy naming a path looks narrower than it
-is.
+is. As first shipped this section over-claimed — see the fix pack at the end of
+this note.
 
 Two things stated rather than glossed:
 
@@ -377,7 +379,7 @@ on the Command API.
 |---------|--------|
 | `pnpm lint` | 0 errors, 0 warnings |
 | `pnpm typecheck` | clean |
-| `pnpm test` | **919 tests, 68 files, passing** (Wave 6: 857 / 64) |
+| `pnpm test` | **919 tests, 68 files, passing** (Wave 6: 857 / 64) — 945 / 69 after the fix pack |
 | `pnpm build` | success — 639.46 kB first load, 42 lazy chunks, **no chunk-size advisory** |
 
 62 tests were added, 48 of them in 4 new files:
@@ -515,3 +517,126 @@ The one item that grew (TD-20) grew because an existing mechanism was used more.
 9. **The performance claim about a chunk-size advisory was corrected.** Wave 6's
    record of it does not reproduce on rebuild. Repeating an unverified figure in
    a hardening wave would have been the wrong kind of continuity.
+
+## Fix pack — the probe invariant reaches the action path, and the CSP stops out-running the adapters (G3 H1 + H2)
+
+`docs/reviews/WAVE_7_GPT_REVIEW.md` held the wave on two findings. Both were the
+same mistake in different clothes: Wave 7 claimed an invariant was structural
+when it was still two copies of a rule that happened to agree.
+
+### H1 — `automationReadiness` could run a rule from an unprobed row
+
+The read-time downgrade shipped, and most consumers used it. Four did not, and
+the serious one was not a pill:
+
+```
+src/domain/leverage.ts        automationReadiness  — action gate
+src/data/mutations.ts         runAutomation        — via automationReadiness
+src/modules/health/HealthPage.tsx        substrate pills
+src/modules/content/ContentItemPage.tsx  publishing copy
+```
+
+`automationReadiness()` compared `integration?.state !== 'connected'`, so any
+non-handoff rule naming a connector became **runnable** the moment a registry
+row said `connected` — with or without the probe that is supposed to be the
+whole meaning of the word. The same function drives the Automation Center
+selector *and* `runAutomation`, so this was not display copy: a hand-edited
+IndexedDB row could let a rule write a notification or open a gate on the
+strength of a connection nobody verified, while `/integrations` three clicks
+away showed the same row as Awaiting Credentials.
+
+Two changes, one behavioural and one structural.
+
+**The invariant moved into the domain.** `hasVerifiedProbe`,
+`isUnverifiedConnectedClaim`, `effectiveIntegrationState`, and `isUsable` now
+live in `src/domain/integrations.ts`; `src/integrations/state.ts` re-exports
+them, so every existing import is unchanged. The move is the point: readiness
+and action gating are domain decisions, `src/integrations/state.ts` imports
+`@/domain`, and a helper the domain cannot import without a cycle is a helper
+the domain quietly works around — which is exactly what happened.
+
+`automationReadiness` now asks `isUsable`, and names the *effective* state in
+its refusal. The credential-gap trigger, the Health substrate pills, the
+publishing panel, `deriveSubstrateHealth`'s disabled filter, and the probe
+writer's disabled guard all read through `effectiveIntegrationState` too.
+
+**And the source is scanned.** A bypass reads perfectly naturally — nobody
+reviewing `integrationStateMeta[integration.state]` sees a bug — so
+`src/integrations/invariant.test.ts` globs every module under `src/`, strips
+comments, and fails if anything but `src/domain/integrations.ts` reads
+`integration.state`. `src/data/seed.ts` is the single listed exemption, because
+seeding writes a state in rather than reading one out. Verified by
+reintroducing the HealthPage bypass: the scan names the file.
+
+### H2 — the CSP accepted origins the adapters refuse
+
+`connectSourcesFromEnv()` ran the two `VITE_*` URLs through `originOf()`, a
+local helper that accepted any parseable `http:` or `https:` URL. Both adapters
+are stricter, so a configured build could put an origin in `connect-src` that
+nothing in the app would ever request:
+
+| Value | Adapter | Old `connect-src` |
+|-------|---------|-------------------|
+| `http://api.example.com` | refused — plaintext on a public host | `http://api.example.com` |
+| `https://user:pw@api.example.com` | refused — userinfo | `https://api.example.com` |
+| `https://api.example.com?api_key=abc` | refused — query string | `https://api.example.com` |
+| `https://models.example.com` (local AI) | refused — not loopback | `https://models.example.com` |
+
+The public no-env build was always `connect-src 'self'`, so nothing shipped
+wrong. What was wrong was the claim: the docs said the policy and the code
+cannot disagree, and a misconfigured hardened build would have handed a
+compromised dependency a remote destination the app itself refuses to call —
+the precise threat `connect-src` exists to close.
+
+`originOf` is gone. The two acceptance rules now live in `src/lib/endpoints.ts`
+as `acceptApiBaseUrl` and `acceptLoopbackEndpoint`, which return either an
+accepted origin/base/host or a typed refusal reason. `resolveApiBaseUrl` and
+`resolveLocalEndpoint` keep their wording and nothing else — each maps a reason
+to the sentence it already printed — and `connectSourcesFromEnv` takes the
+origin of an accepted check and nothing otherwise. There is one decision now,
+asked in three places, rather than three checks that had to be kept in step by
+inspection.
+
+`src/lib/csp.ts` imports `./endpoints.ts` with its extension, and
+`tsconfig.app.json` allows that for this one import: `vite.config.ts` loads the
+CSP builder directly to write the policy at build time, and Vite's native config
+loader requires every import beneath a config file to name its file.
+
+### Verification
+
+| Command | Result |
+|---------|--------|
+| `pnpm lint` | 0 errors, 0 warnings |
+| `pnpm typecheck` | clean |
+| `pnpm test` | **945 tests, 69 files, passing** (919 / 68 before the fix pack) |
+| `pnpm build` | success, no chunk-size advisory |
+
+26 regressions, one new file:
+
+- **`src/lib/csp.test.ts` (+14)** — eight refused Command API values and five
+  refused local-AI values, each asserted against *both* the adapter and the
+  policy in the same case, so the two cannot drift apart again; plus origin-only
+  extraction, the loopback exception, a half-refused build keeping its accepted
+  half, and a policy built from a secret-bearing URL containing neither the
+  secret nor the origin.
+- **`src/domain/leverage.test.ts` (+4)** — a rule naming a `connected` row with
+  no `lastProbedAt` is not runnable, nor one whose timestamp will not parse; the
+  same rule *is* runnable once the row carries a real probe; and an unverified
+  claim counts as a credential gap like everywhere else. The suite's fixture now
+  gives a `connected` row a probe by default, so a test has to opt into the
+  unevidenced shape.
+- **`src/data/leverage.mutations.test.ts` (+2)** — `runAutomation` against a
+  store row edited to `connected` with no probe records a `refused` run with
+  reason `awaiting_credentials`, matches nothing, and writes no notification;
+  the same rule applies once the row carries a probe.
+- **`src/modules/health/HealthPage.test.tsx` (+2)** — every substrate row pills
+  as Awaiting Credentials when the dataset claims Connected with no probe, and
+  the header statement stays `offline`.
+- **`src/modules/content/ContentItemPage.test.tsx` (+2)** — the publishing panel
+  reads an unprobed LinkedIn row as Awaiting Credentials, and still refuses to
+  publish when the row carries a verified probe.
+- **`src/integrations/invariant.test.ts` (+2, new)** — the source scan above,
+  plus a guard that the scan is actually looking at the source tree.
+
+No product behaviour was added. The only user-visible change is that two
+surfaces and one gate now agree with the registry about what Connected means.

@@ -142,6 +142,9 @@ than a display glitch:
    Awaiting Credentials on every surface. A UI showing Connected anyway means a
    consumer is reading `integration.state` directly — that is the bug, and
    `src/integrations/state.test.ts` covers the contract it broke.
+   `src/integrations/invariant.test.ts` should have failed first: it scans the
+   source for exactly that read, so a green build with a wrong pill means the row
+   was aliased to a name the scan does not know about.
 3. If `lastProbedAt` is present, a probe genuinely ran. `/sync` is the only
    thing that can run one.
 

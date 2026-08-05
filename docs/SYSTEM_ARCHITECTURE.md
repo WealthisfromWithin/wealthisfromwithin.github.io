@@ -124,7 +124,7 @@ remember.
 ### 3.2 Connected means a verified probe
 
 An integration is `connected` **only** if the registry row carries a
-`lastProbedAt` timestamp from a probe that succeeded. This is enforced in two
+`lastProbedAt` timestamp from a probe that succeeded. This is enforced in three
 places, deliberately:
 
 - **On write** — `recordIntegrationProbe` is the only writer that can set
@@ -132,6 +132,14 @@ places, deliberately:
 - **On read** — `effectiveIntegrationState` downgrades any row claiming
   `connected` without a probe to `awaiting_credentials`, and every surface,
   counter, and health derivation reads through it.
+- **On gate** — `automationReadiness` asks `isUsable`, so an unevidenced claim
+  cannot make a rule runnable. This is the reason the downgrade lives in
+  `src/domain/integrations.ts` rather than beside the registry surface: action
+  gating is a domain decision, and a helper the domain cannot import is a helper
+  the domain works around.
+
+`src/integrations/invariant.test.ts` enforces the boundary against the source
+itself, failing the build when any other module reads the stored field.
 
 The downgrade is not a throw. A row claiming a connection it cannot evidence
 *is* a connection whose credentials are unverified, so reporting it as such is

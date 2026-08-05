@@ -175,11 +175,18 @@ off deliberately is not a connector waiting to be checked. On success it writes
 `lastProbedAt` either way**, because "we asked and it did not answer" is a
 measurement worth keeping.
 
-**Read side** — `effectiveIntegrationState` in `src/integrations/state.ts`
-downgrades any row claiming `connected` without a probe to
-`awaiting_credentials`, and every consumer reads through it: the registry page,
-the MCP panel, `countByState`, `isUsable`, `deriveSubstrateHealth`, blocked
-capabilities, and the search index.
+**Read side** — `effectiveIntegrationState` in `src/domain/integrations.ts`
+(re-exported by `src/integrations/state.ts`) downgrades any row claiming
+`connected` without a probe to `awaiting_credentials`, and every consumer reads
+through it: the registry page, the MCP panel, the Health Monitor counts and
+substrate pills, the content publishing panel, `countByState`, `isUsable`,
+`deriveSubstrateHealth`, blocked capabilities, the search index, and
+`automationReadiness` — which is the gate deciding whether a rule may write, so
+it is the one place where the downgrade stops being a display concern.
+
+`src/integrations/invariant.test.ts` scans the source tree and fails the build
+if any module other than `src/domain/integrations.ts` reads `integration.state`
+directly.
 
 **Why both.** The writer contract governs rows written from now on. The read-time
 downgrade governs rows already in an operator's browser, rows a future writer
