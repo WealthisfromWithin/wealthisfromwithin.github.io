@@ -72,3 +72,12 @@ not be read as progress toward them.
 Category subtotals in the Wave 1 table above do not sum to its stated total; the
 per-category breakdown has not been reconciled since Wave 0, so treat the headline
 scores as the authoritative series.
+
+
+---
+
+## Wave 4 update (Architect)
+
+**Score: 65 / 100** (was 55 after Wave 3)
+
+Content OS live with compliance-aware approvals (M1 fixed). Cognition / automations / API sync still ahead.
