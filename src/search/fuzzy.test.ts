@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { fuzzyMatch, rankByFuzzy } from './fuzzy';
 import { buildSearchIndex, searchDocuments } from './index';
-import { enabledModules } from '@/app/modules';
+import { isSafeInternalHref } from '@/app/href';
 import { buildDemoDataset } from '@/data/seed';
 
 const now = new Date('2026-08-05T07:30:00.000Z');
@@ -81,10 +81,27 @@ describe('searchDocuments', () => {
     expect(approval?.item.demo).toBe(true);
   });
 
-  it('never routes to a module that is not built', () => {
-    const enabled = new Set(enabledModules().map((module) => module.path));
+  it('sends a person to their CRM detail route', () => {
+    const results = searchDocuments('aldridge', index);
+    expect(results[0]?.item.route).toBe('/crm/person/p-aldridge');
+  });
+
+  it('sends an opportunity to its pipeline detail route', () => {
+    const results = searchDocuments('retainer renewal', index);
+    const opportunity = results.find((result) => result.item.kind === 'opportunity');
+    expect(opportunity?.item.route).toBe('/pipeline/opportunity/opp-truoak');
+  });
+
+  it('indexes the Wave 3 record kinds', () => {
+    const kinds = new Set(index.map((document) => document.kind));
+    for (const kind of ['person', 'company', 'task', 'project', 'meeting', 'opportunity']) {
+      expect(kinds.has(kind as never)).toBe(true);
+    }
+  });
+
+  it('only ever routes somewhere the router actually serves', () => {
     for (const document of index) {
-      expect(enabled.has(document.route.split('?')[0] ?? '')).toBe(true);
+      expect(isSafeInternalHref(document.route)).toBe(true);
     }
   });
 });
