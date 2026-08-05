@@ -81,3 +81,12 @@ scores as the authoritative series.
 **Score: 65 / 100** (was 55 after Wave 3)
 
 Content OS live with compliance-aware approvals (M1 fixed). Cognition / automations / API sync still ahead.
+
+
+---
+
+## Wave 5 update (Architect)
+
+**Score: 72 / 100** (was 65 after Wave 4)
+
+Cognition modules + Agent Kernel live; local AI loopback-only (H1 fixed). Automations/MCP/API sync still ahead.
