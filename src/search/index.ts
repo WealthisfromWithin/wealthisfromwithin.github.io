@@ -1,10 +1,12 @@
 import type { SovereignDataset } from '@/data/dataset';
 import {
+  automationHref,
   companyHref,
   contentHref,
   decisionHref,
   documentHref,
   knowledgeHref,
+  missionHref,
   opportunityHref,
   personHref,
 } from '@/app/href';
@@ -50,7 +52,8 @@ export type SearchKind =
   | 'document'
   | 'decision'
   | 'prompt'
-  | 'research';
+  | 'research'
+  | 'automation';
 
 export interface SearchDocument {
   id: string;
@@ -86,6 +89,7 @@ export const searchKindLabel: Record<SearchKind, string> = {
   decision: 'Decision',
   prompt: 'Prompt',
   research: 'Question',
+  automation: 'Automation',
 };
 
 /**
@@ -170,8 +174,8 @@ export function buildSearchIndex(dataset: SovereignDataset): SearchDocument[] {
       kind: 'mission',
       title: `${mission.code} · ${mission.title}`,
       subtitle: mission.status,
-      keywords: [mission.objective],
-      route: '/',
+      keywords: [mission.objective, mission.successMeasure, mission.blockedReason ?? ''],
+      route: missionHref(mission.id),
       demo: mission.source === 'demo',
     });
   }
@@ -281,8 +285,21 @@ export function buildSearchIndex(dataset: SovereignDataset): SearchDocument[] {
       title: integration.name,
       subtitle: integration.state.replace('_', ' '),
       keywords: [...integration.capabilities, integration.category],
-      route: '/integrations',
+      // An MCP row is read on the panel that explains it, not in the long table.
+      route: integration.category === 'mcp' ? '/integrations/mcp' : '/integrations',
       demo: integration.source === 'demo',
+    });
+  }
+
+  for (const rule of dataset.automations) {
+    documents.push({
+      id: `automation:${rule.id}`,
+      kind: 'automation',
+      title: rule.name,
+      subtitle: [rule.enabled ? 'enabled' : 'disabled', rule.trigger.replace(/_/g, ' ')].join(' · '),
+      keywords: [rule.summary, rule.notes, rule.action, rule.requiresIntegrationId ?? ''],
+      route: automationHref(rule.id),
+      demo: rule.source === 'demo',
     });
   }
 

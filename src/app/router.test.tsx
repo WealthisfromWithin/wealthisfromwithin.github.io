@@ -17,6 +17,8 @@ const RECORD_IDS: Record<string, string> = {
   'knowledge-node': 'kn-compounding-thesis',
   document: 'doc-truoak-renewal-memo',
   decision: 'dec-no-discount',
+  'automation-rule': 'aut-overdue-tasks',
+  mission: 'msn-042',
 };
 
 function renderAt(path: string) {
@@ -73,7 +75,8 @@ describe('router', () => {
   );
 
   it('sends an unrouted path back to the brief rather than a coming-soon page', async () => {
-    renderAt('/automations');
+    // `/sync` is the Wave 7 module: planned, so the router serves nothing for it.
+    renderAt('/sync');
 
     expect(
       within(await page()).getByRole('heading', { level: 1, name: 'Morning Brief' }),

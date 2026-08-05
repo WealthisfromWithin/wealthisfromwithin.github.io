@@ -3,15 +3,19 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useSovereign } from '@/app/context';
 import type { Integration, IntegrationState } from '@/domain';
 import {
+  categoryFilterLabel,
   countByState,
   deriveSubstrateHealth,
+  INTEGRATION_CATEGORY_FILTERS,
   INTEGRATION_STATES,
   integrationCategoryLabel,
   integrationStateMeta,
   stateFilterLabel,
+  type IntegrationCategoryFilter,
 } from '@/integrations/state';
 import { cn } from '@/lib/cn';
 import { SectionLabel, StatePill } from '@/ui/primitives';
+import { IntegrationTabs } from './IntegrationTabs';
 
 type Filter = IntegrationState | 'all';
 
@@ -22,6 +26,10 @@ function isFilter(value: string | null): value is Filter {
     value === 'disabled' ||
     value === 'awaiting_credentials'
   );
+}
+
+function parseCategory(value: string | null): IntegrationCategoryFilter {
+  return INTEGRATION_CATEGORY_FILTERS.find((option) => option === value) ?? 'all';
 }
 
 function IntegrationRow({ integration }: { integration: Integration }) {
@@ -50,6 +58,11 @@ function IntegrationRow({ integration }: { integration: Integration }) {
       </td>
       <td className="py-2.5 font-mono text-[0.65rem] text-faint">
         {integration.capabilities.length > 0 ? integration.capabilities.join(' · ') : '—'}
+        <span className="mt-0.5 block">
+          {integration.lastProbedAt === undefined
+            ? 'never probed'
+            : `probed ${integration.lastProbedAt.slice(0, 10)}`}
+        </span>
       </td>
     </tr>
   );
@@ -61,6 +74,7 @@ export function IntegrationsPage() {
 
   const rawFilter = searchParams.get('state');
   const filter: Filter = isFilter(rawFilter) ? rawFilter : 'all';
+  const category = parseCategory(searchParams.get('category'));
 
   const counts = useMemo(() => countByState(dataset.integrations), [dataset.integrations]);
   const health = deriveSubstrateHealth(dataset.integrations);
@@ -69,16 +83,27 @@ export function IntegrationsPage() {
     () =>
       [...dataset.integrations]
         .filter((integration) => filter === 'all' || integration.state === filter)
+        .filter((integration) => category === 'all' || integration.category === category)
         .sort((a, b) => {
           if (a.state !== b.state) {
             return INTEGRATION_STATES.indexOf(a.state) - INTEGRATION_STATES.indexOf(b.state);
           }
           return a.name.localeCompare(b.name);
         }),
-    [dataset.integrations, filter],
+    [dataset.integrations, filter, category],
   );
 
   const filters: Filter[] = ['all', ...INTEGRATION_STATES];
+
+  /** Both filters live in the URL, so a filtered registry is a shareable link. */
+  function params(next: { state?: Filter; category?: IntegrationCategoryFilter }): URLSearchParams {
+    const search = new URLSearchParams();
+    const state = next.state ?? filter;
+    const nextCategory = next.category ?? category;
+    if (state !== 'all') search.set('state', state);
+    if (nextCategory !== 'all') search.set('category', nextCategory);
+    return search;
+  }
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-6">
@@ -113,13 +138,15 @@ export function IntegrationsPage() {
         </dl>
       </header>
 
+      <IntegrationTabs />
+
       <div className="mb-3 flex flex-wrap items-center gap-2">
         {filters.map((value) => (
           <button
             key={value}
             type="button"
             onClick={() => {
-              setSearchParams(value === 'all' ? {} : { state: value });
+              setSearchParams(params({ state: value }));
             }}
             className={cn(
               'label-caps border px-2.5 py-1 transition-colors',
@@ -139,10 +166,33 @@ export function IntegrationsPage() {
         </p>
       </div>
 
+      <div className="mb-3 flex flex-wrap items-center gap-1.5">
+        {INTEGRATION_CATEGORY_FILTERS.map((value) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => {
+              setSearchParams(params({ category: value }));
+            }}
+            className={cn(
+              'label-caps border px-2 py-0.5 transition-colors',
+              category === value
+                ? 'border-gold/50 text-gold'
+                : 'border-line text-faint hover:border-gold/40 hover:text-muted',
+            )}
+          >
+            {categoryFilterLabel(value)}
+          </button>
+        ))}
+      </div>
+
       {!ready ? (
         <p className="text-sm text-faint italic">Opening the local store…</p>
       ) : rows.length === 0 ? (
-        <p className="text-sm text-faint italic">No integrations in this state.</p>
+        <p className="text-sm text-faint italic">
+          No connector matches {stateFilterLabel(filter).toLowerCase()} in{' '}
+          {categoryFilterLabel(category).toLowerCase()}.
+        </p>
       ) : (
         <table className="w-full border-collapse text-left">
           <thead>

@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { automationTriggerHref } from '@/domain';
 import { enabledModules, enabledSubRoutes } from './modules';
 import {
+  automationHref,
   companyHref,
   contentHref,
   decisionHref,
   documentHref,
   isSafeInternalHref,
   knowledgeHref,
+  missionHref,
   normalizeInternalHref,
   opportunityHref,
   personHref,
@@ -54,6 +57,19 @@ describe('isSafeInternalHref', () => {
     expect(isSafeInternalHref('/decisions?status=proposed')).toBe(true);
     expect(isSafeInternalHref('/prompts?intent=critique')).toBe(true);
     expect(isSafeInternalHref('/research?status=answered')).toBe(true);
+    expect(isSafeInternalHref('/automations?state=blocked')).toBe(true);
+    expect(isSafeInternalHref('/missions?status=blocked')).toBe(true);
+    expect(isSafeInternalHref('/analytics?window=90d')).toBe(true);
+    expect(isSafeInternalHref('/metrics?window=365d')).toBe(true);
+    expect(isSafeInternalHref('/integrations?state=disabled&category=mcp')).toBe(true);
+  });
+
+  it('accepts every href an automation notification can carry', () => {
+    // `runAutomation` writes these into the inbox, so a trigger whose href the
+    // allowlist would refuse must fail here rather than on the operator's screen.
+    for (const [trigger, href] of Object.entries(automationTriggerHref)) {
+      expect({ trigger, safe: isSafeInternalHref(href) }).toEqual({ trigger, safe: true });
+    }
   });
 
   it('allows the declared record detail routes', () => {
@@ -65,6 +81,12 @@ describe('isSafeInternalHref', () => {
     expect(isSafeInternalHref('/documents/doc-truoak-renewal-memo')).toBe(false);
     expect(isSafeInternalHref('/documents/doc/doc-truoak-renewal-memo')).toBe(true);
     expect(isSafeInternalHref('/decisions/entry/dec-no-discount')).toBe(true);
+    expect(isSafeInternalHref('/automations/rule/aut-overdue-tasks')).toBe(true);
+    expect(isSafeInternalHref('/missions/mission/msn-042')).toBe(true);
+    // The rule and mission ids live under a named segment, so neither can be
+    // read as a surface of the module that owns it.
+    expect(isSafeInternalHref('/automations/aut-overdue-tasks')).toBe(false);
+    expect(isSafeInternalHref('/missions/msn-042')).toBe(false);
   });
 
   it('keeps the content hub sub-routes and its detail route apart', () => {
@@ -138,11 +160,9 @@ describe('isSafeInternalHref', () => {
   });
 
   it('rejects planned-module paths', () => {
-    expect(isSafeInternalHref('/missions')).toBe(false);
-    expect(isSafeInternalHref('/automations')).toBe(false);
-    expect(isSafeInternalHref('/analytics')).toBe(false);
-    expect(isSafeInternalHref('/metrics')).toBe(false);
+    // Wave 7. The route does not exist, so neither does a link to it.
     expect(isSafeInternalHref('/sync')).toBe(false);
+    expect(isSafeInternalHref('/mcp')).toBe(false);
   });
 
   it('rejects malformed strings', () => {
@@ -175,7 +195,7 @@ describe('normalizeInternalHref', () => {
     expect(normalizeInternalHref('javascript:alert(1)', '/inbox')).toBe('/inbox');
     expect(normalizeInternalHref('https://evil.example', '/approvals')).toBe('/approvals');
     expect(normalizeInternalHref('//evil.example', '/')).toBe('/');
-    expect(normalizeInternalHref('/missions', '/inbox')).toBe('/inbox');
+    expect(normalizeInternalHref('/sync', '/inbox')).toBe('/inbox');
   });
 });
 
@@ -188,6 +208,8 @@ describe('record link builders', () => {
     expect(knowledgeHref('kn-compounding-thesis')).toBe('/knowledge/node/kn-compounding-thesis');
     expect(documentHref('doc-advisory-sop')).toBe('/documents/doc/doc-advisory-sop');
     expect(decisionHref('dec-no-discount')).toBe('/decisions/entry/dec-no-discount');
+    expect(automationHref('aut-overdue-tasks')).toBe('/automations/rule/aut-overdue-tasks');
+    expect(missionHref('msn-042')).toBe('/missions/mission/msn-042');
   });
 
   it('degrades to the module list rather than emitting an unsafe link', () => {
@@ -200,6 +222,8 @@ describe('record link builders', () => {
     expect(knowledgeHref('../node')).toBe('/knowledge');
     expect(documentHref('doc truoak?x=1')).toBe('/documents');
     expect(decisionHref('javascript:alert(1)')).toBe('/decisions');
+    expect(automationHref('../rule')).toBe('/automations');
+    expect(missionHref('')).toBe('/missions');
   });
 
   it('emits only hrefs the allowlist accepts', () => {
@@ -211,6 +235,8 @@ describe('record link builders', () => {
       knowledgeHref('kn-1'),
       documentHref('doc-1'),
       decisionHref('dec-1'),
+      automationHref('aut-1'),
+      missionHref('msn-1'),
     ]) {
       expect(isSafeInternalHref(href)).toBe(true);
     }

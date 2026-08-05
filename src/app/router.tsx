@@ -4,7 +4,10 @@ import { enabledModules, enabledRecordRoutes, enabledSubRoutes } from './modules
 import { MorningBriefPage } from '@/modules/dashboard/MorningBriefPage';
 import {
   AiWorkspacePage,
+  AnalyticsPage,
   ApprovalsPage,
+  AutomationRulePage,
+  AutomationsPage,
   CalendarPage,
   CompanyDetailPage,
   ContentAnalyticsPage,
@@ -24,8 +27,12 @@ import {
   IntegrationsPage,
   KnowledgeNodePage,
   KnowledgePage,
+  McpPage,
   MeetingsPage,
   MemoryPage,
+  MetricsPage,
+  MissionPage,
+  MissionsPage,
   OpportunityDetailPage,
   PersonDetailPage,
   PipelinePage,
@@ -60,6 +67,10 @@ const moduleElements: Record<string, RouteObject['element']> = {
   research: <ResearchPage />,
   ai: <AiWorkspacePage />,
   prompts: <PromptsPage />,
+  missions: <MissionsPage />,
+  metrics: <MetricsPage />,
+  automations: <AutomationsPage />,
+  analytics: <AnalyticsPage />,
   integrations: <IntegrationsPage />,
   settings: <SettingsPage />,
 };
@@ -71,6 +82,7 @@ const subRouteElements: Record<string, RouteObject['element']> = {
   'content-campaigns': <ContentCampaignsPage />,
   'content-library': <ContentLibraryPage />,
   'content-analytics': <ContentAnalyticsPage />,
+  'integrations-mcp': <McpPage />,
 };
 
 /** Keyed by the record-route id declared in the registry. */
@@ -82,6 +94,8 @@ const recordElements: Record<string, RouteObject['element']> = {
   'knowledge-node': <KnowledgeNodePage />,
   document: <DocumentPage />,
   decision: <DecisionPage />,
+  'automation-rule': <AutomationRulePage />,
+  mission: <MissionPage />,
 };
 
 function buildModuleRoutes(): RouteObject[] {

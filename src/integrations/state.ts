@@ -1,4 +1,5 @@
 import type { Integration, IntegrationCategory, IntegrationState } from '@/domain';
+import { integrationCategorySchema } from '@/domain';
 
 export const integrationCategoryLabel: Record<IntegrationCategory, string> = {
   ai: 'AI',
@@ -16,6 +17,20 @@ export const INTEGRATION_STATES: readonly IntegrationState[] = [
   'disabled',
   'awaiting_credentials',
 ] as const;
+
+/**
+ * Registry filters. `all` first, then the categories the domain declares, so a
+ * new category cannot exist in the schema and be unfilterable on the surface.
+ */
+export const INTEGRATION_CATEGORY_FILTERS = [
+  'all',
+  ...integrationCategorySchema.options,
+] as const;
+export type IntegrationCategoryFilter = (typeof INTEGRATION_CATEGORY_FILTERS)[number];
+
+export function categoryFilterLabel(value: IntegrationCategoryFilter): string {
+  return value === 'all' ? 'Every category' : integrationCategoryLabel[value];
+}
 
 export interface IntegrationStateMeta {
   label: string;

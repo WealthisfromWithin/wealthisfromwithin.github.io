@@ -4,6 +4,7 @@ import { DAY_MS, formatClockTime } from '@/lib/clock';
 import { formatCurrencyCents, formatDelta, formatMetricValue } from '@/lib/format';
 import { countByState } from '@/integrations/state';
 import { sessionsAwaitingProvider } from '@/modules/ai/workspace';
+import { automationsThatCannotRun } from '@/modules/automations/automations';
 import { dayAgenda } from '@/modules/calendar/calendar';
 import {
   contentAwaitingApproval,
@@ -72,12 +73,13 @@ const SECTION_LIMIT = 6;
 
 /**
  * The attention question is the one the surface exists to answer. Wave 3 gave it
- * two more sources (overdue work and stalled deals) and Wave 5 three more (calls
- * nobody has made, questions past their date, memory past its review). It gets a
- * deeper cut before truncation; every section still prints `shown/total` when it
- * truncates.
+ * two more sources (overdue work and stalled deals), Wave 5 three more (calls
+ * nobody has made, questions past their date, memory past its review), and
+ * Wave 6 one more class again — gates opened by a rule rather than by a person.
+ * It gets a deeper cut before truncation; every section still prints
+ * `shown/total` when it truncates.
  */
-const ATTENTION_LIMIT = 12;
+const ATTENTION_LIMIT = 14;
 
 function isDemo(source: string): boolean {
   return source === 'demo';
@@ -136,10 +138,29 @@ function attentionSection(dataset: SovereignDataset, now: Date): BriefItem[] {
       .map((item) => item.approvalId),
   );
 
+  // Gates a rule opened are counted as one line rather than listed one by one.
+  // A rule can raise a gate for every record it matches, and a fabric that fills
+  // this question with its own output drowns out the gates a person asked for.
+  const automationGates = dataset.approvals.filter(
+    (approval) => approval.status === 'pending' && approval.automationRunId !== undefined,
+  );
+  if (automationGates.length > 0) {
+    items.push({
+      id: 'automations:gates',
+      title: `${String(automationGates.length)} automation ${automationGates.length === 1 ? 'gate is' : 'gates are'} waiting on you`,
+      detail: 'A rule matched local records and stopped. Nothing is written until a gate is cleared.',
+      meta: 'Automations',
+      tone: 'warning',
+      demo: automationGates.some((approval) => isDemo(approval.source)),
+      href: normalizeInternalHref('/approvals?status=pending', '/approvals'),
+    });
+  }
+  const automationGateIds = new Set(automationGates.map((approval) => approval.id));
+
   for (const approval of dataset.approvals) {
     // A decided gate is no longer demanding attention, whatever its risk.
     if (approval.status !== 'pending' || approval.risk === 'info') continue;
-    if (contentGates.has(approval.id)) continue;
+    if (contentGates.has(approval.id) || automationGateIds.has(approval.id)) continue;
     items.push({
       id: `approval:${approval.id}`,
       title: `Approval: ${approval.title}`,
@@ -360,8 +381,25 @@ function overnightSection(dataset: SovereignDataset, now: Date): BriefItem[] {
     }));
 }
 
-function blockedSection(dataset: SovereignDataset): BriefItem[] {
+function blockedSection(dataset: SovereignDataset, now: Date): BriefItem[] {
   const items: BriefItem[] = [];
+
+  // A rule that cannot run is blocked work like any other, and it is the kind
+  // that fails silently unless the Brief says so. One line for the class.
+  const stuckRules = automationsThatCannotRun(dataset, now);
+  if (stuckRules.length > 0) {
+    items.push({
+      id: 'automations:blocked',
+      title: `${String(stuckRules.length)} automation ${stuckRules.length === 1 ? 'rule cannot' : 'rules cannot'} run`,
+      detail:
+        stuckRules[0]?.readiness.statement ??
+        'The rules name an integration that is not connected here.',
+      meta: 'Automations',
+      tone: 'warning',
+      demo: stuckRules.some((row) => isDemo(row.rule.source)),
+      href: normalizeInternalHref('/automations?state=blocked', '/automations'),
+    });
+  }
 
   for (const task of dataset.tasks) {
     if (task.status !== 'blocked') continue;
@@ -446,6 +484,28 @@ function leverageSection(dataset: SovereignDataset): BriefItem[] {
     });
   }
 
+  // What the automation fabric actually did, counted from the run log rather
+  // than claimed from the rule list: runs that wrote something, against runs
+  // that could not run at all.
+  // It sits directly under the insight rather than at the end, because the
+  // metric rows below it are inputs and these two lines are outcomes.
+  if (dataset.automationRuns.length > 0) {
+    const applied = dataset.automationRuns.filter((run) => run.outcome === 'applied').length;
+    const refused = dataset.automationRuns.filter((run) => run.outcome === 'refused').length;
+    items.splice(insight ? 1 : 0, 0, {
+      id: 'automations:runs',
+      title: `${String(applied)} of ${String(dataset.automationRuns.length)} automation runs did something`,
+      detail:
+        refused === 0
+          ? 'Every recorded run either wrote a local signal, opened a gate, or matched nothing.'
+          : `${String(refused)} could not run at all, and are recorded as refusing rather than as passing.`,
+      meta: 'Run log',
+      tone: refused > applied ? 'warning' : 'info',
+      demo: dataset.automationRuns.some((run) => isDemo(run.source)),
+      href: '/automations',
+    });
+  }
+
   return items;
 }
 
@@ -488,7 +548,7 @@ export function buildMorningBrief(dataset: SovereignDataset, now: Date): Morning
       id: 'blocked',
       question: 'What is blocked?',
       lens: 'Work that cannot move and the reason it cannot.',
-      items: blockedSection(dataset),
+      items: blockedSection(dataset, now),
       emptyMessage: 'Nothing is blocked.',
     },
     {

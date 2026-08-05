@@ -12,16 +12,20 @@ import {
   FileText,
   Flame,
   Inbox,
+  Layers,
   Lightbulb,
   ListChecks,
   NotebookPen,
+  Plug,
   Radar,
   RefreshCw,
   ScrollText,
   Search,
   ShieldCheck,
   Sparkles,
+  Target,
   TrendingUp,
+  Workflow,
 } from 'lucide-react';
 import { enabledModules } from '@/app/modules';
 
@@ -196,6 +200,83 @@ export function buildCommands(actions: CommandActions): Command[] {
       icon: Radar,
       run: () => {
         actions.navigate('/research');
+      },
+    },
+    {
+      id: 'act:automations-blocked',
+      label: 'Automations that cannot run',
+      hint: 'Rules waiting on a connector this bundle cannot reach. They refuse rather than fail quietly.',
+      group: 'act',
+      keywords: ['automation', 'rule', 'blocked', 'n8n', 'workflow', 'refused'],
+      icon: Workflow,
+      run: () => {
+        actions.navigate('/automations?state=blocked');
+      },
+    },
+    {
+      id: 'act:missions-blocked',
+      label: 'Objectives that cannot move',
+      hint: 'Blocked missions, with the blocker recorded on each.',
+      group: 'act',
+      keywords: ['mission', 'objective', 'blocked', 'goal'],
+      icon: Target,
+      run: () => {
+        actions.navigate('/missions?status=blocked');
+      },
+    },
+    {
+      id: 'surface:automations',
+      label: 'Open the Automation Center',
+      hint: 'Local rules over the local store. Nothing publishes and nothing runs on a timer.',
+      group: 'surface',
+      keywords: ['automation', 'rules', 'workflow', 'leverage', 'run'],
+      icon: Workflow,
+      run: () => {
+        actions.navigate('/automations');
+      },
+    },
+    {
+      id: 'surface:missions',
+      label: 'Open Mission Control',
+      hint: 'Objectives with progress counted from the work linked to them.',
+      group: 'surface',
+      keywords: ['mission', 'objective', 'goal', 'progress'],
+      icon: Target,
+      run: () => {
+        actions.navigate('/missions');
+      },
+    },
+    {
+      id: 'surface:metrics',
+      label: 'Open Business Metrics',
+      hint: 'Financial KPIs counted from the local domain. No finance API is called.',
+      group: 'surface',
+      keywords: ['metrics', 'kpi', 'revenue', 'financial', 'pipeline', 'money'],
+      icon: ChartColumn,
+      run: () => {
+        actions.navigate('/metrics');
+      },
+    },
+    {
+      id: 'surface:analytics',
+      label: 'Open Analytics',
+      hint: 'Recorded activity, throughput, and provenance. Nothing observes the operator.',
+      group: 'surface',
+      keywords: ['analytics', 'usage', 'activity', 'throughput', 'events'],
+      icon: Layers,
+      run: () => {
+        actions.navigate('/analytics');
+      },
+    },
+    {
+      id: 'surface:mcp',
+      label: 'Review MCP servers',
+      hint: 'Connected, Disabled, or Awaiting Credentials — read from the registry, never probed here.',
+      group: 'surface',
+      keywords: ['mcp', 'server', 'hermes', 'model context protocol', 'tools'],
+      icon: Plug,
+      run: () => {
+        actions.navigate('/integrations/mcp');
       },
     },
     {

@@ -7,8 +7,19 @@ import { lazy } from 'react';
 export const AiWorkspacePage = lazy(() =>
   import('@/modules/ai/AiWorkspacePage').then((m) => ({ default: m.AiWorkspacePage })),
 );
+export const AnalyticsPage = lazy(() =>
+  import('@/modules/analytics/AnalyticsPage').then((m) => ({ default: m.AnalyticsPage })),
+);
 export const ApprovalsPage = lazy(() =>
   import('@/modules/approvals/ApprovalsPage').then((m) => ({ default: m.ApprovalsPage })),
+);
+export const AutomationRulePage = lazy(() =>
+  import('@/modules/automations/AutomationRulePage').then((m) => ({
+    default: m.AutomationRulePage,
+  })),
+);
+export const AutomationsPage = lazy(() =>
+  import('@/modules/automations/AutomationsPage').then((m) => ({ default: m.AutomationsPage })),
 );
 export const CalendarPage = lazy(() =>
   import('@/modules/calendar/CalendarPage').then((m) => ({ default: m.CalendarPage })),
@@ -74,8 +85,20 @@ export const KnowledgePage = lazy(() =>
 export const MeetingsPage = lazy(() =>
   import('@/modules/meetings/MeetingsPage').then((m) => ({ default: m.MeetingsPage })),
 );
+export const McpPage = lazy(() =>
+  import('@/modules/integrations/McpPage').then((m) => ({ default: m.McpPage })),
+);
 export const MemoryPage = lazy(() =>
   import('@/modules/memory/MemoryPage').then((m) => ({ default: m.MemoryPage })),
+);
+export const MetricsPage = lazy(() =>
+  import('@/modules/metrics/MetricsPage').then((m) => ({ default: m.MetricsPage })),
+);
+export const MissionPage = lazy(() =>
+  import('@/modules/missions/MissionPage').then((m) => ({ default: m.MissionPage })),
+);
+export const MissionsPage = lazy(() =>
+  import('@/modules/missions/MissionsPage').then((m) => ({ default: m.MissionsPage })),
 );
 export const OpportunityDetailPage = lazy(() =>
   import('@/modules/pipeline/OpportunityDetailPage').then((m) => ({

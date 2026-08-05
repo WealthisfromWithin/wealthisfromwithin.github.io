@@ -212,6 +212,25 @@ export const integrationCatalog: readonly IntegrationCatalogEntry[] = [
     rationale: 'Target MCP gateway. Not built.',
     substrate: true,
   },
+  // Vendor MCP servers the operation has looked at and not adopted. Listed as
+  // `disabled` rather than left out: a registry that only names what is planned
+  // hides the choices that were already made against something.
+  {
+    id: 'github-mcp',
+    name: 'GitHub MCP Server',
+    category: 'mcp',
+    state: 'disabled',
+    capabilities: ['Repo reads', 'Issue reads'],
+    rationale: 'Vendor server. Disabled: the GitHub connector already covers read-only signals.',
+  },
+  {
+    id: 'notion-mcp',
+    name: 'Notion MCP Server',
+    category: 'mcp',
+    state: 'disabled',
+    capabilities: ['Docs', 'Databases'],
+    rationale: 'Vendor server. Disabled while Documents and Knowledge stay local-first.',
+  },
   {
     id: 'cursor',
     name: 'Cursor',

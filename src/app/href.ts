@@ -1,5 +1,7 @@
-import { INTEGRATION_STATES } from '@/integrations/state';
+import { INTEGRATION_CATEGORY_FILTERS, INTEGRATION_STATES } from '@/integrations/state';
+import { ANALYTICS_WINDOWS } from '@/modules/analytics/analytics';
 import { APPROVAL_FILTERS } from '@/modules/approvals/queue';
+import { AUTOMATION_FILTERS } from '@/modules/automations/automations';
 import {
   CONTENT_FORMAT_FILTERS,
   CONTENT_STATUS_FILTERS,
@@ -17,6 +19,8 @@ import { INBOX_SEVERITY_FILTERS, INBOX_STATUS_FILTERS } from '@/modules/inbox/no
 import { KNOWLEDGE_KIND_FILTERS, KNOWLEDGE_VIEWS } from '@/modules/knowledge/knowledge';
 import { MEETING_WINDOWS } from '@/modules/meetings/meetings';
 import { MEMORY_KIND_FILTERS, MEMORY_STATES } from '@/modules/memory/memory';
+import { METRIC_WINDOWS } from '@/modules/metrics/metrics';
+import { MISSION_FILTERS } from '@/modules/missions/missions';
 import { PIPELINE_STAGE_FILTERS } from '@/modules/pipeline/pipeline';
 import { PROJECT_FILTERS } from '@/modules/projects/projects';
 import { PROMPT_FILTERS } from '@/modules/prompts/prompts';
@@ -39,6 +43,7 @@ const ALLOWED_QUERY_PARAMS: Record<string, Record<string, readonly string[]>> = 
   },
   '/integrations': {
     state: [...INTEGRATION_STATES, 'all'],
+    category: INTEGRATION_CATEGORY_FILTERS,
   },
   '/crm': {
     view: CRM_VIEWS,
@@ -93,6 +98,18 @@ const ALLOWED_QUERY_PARAMS: Record<string, Record<string, readonly string[]>> = 
   },
   '/research': {
     status: RESEARCH_FILTERS,
+  },
+  '/automations': {
+    state: AUTOMATION_FILTERS,
+  },
+  '/missions': {
+    status: MISSION_FILTERS,
+  },
+  '/analytics': {
+    window: ANALYTICS_WINDOWS,
+  },
+  '/metrics': {
+    window: METRIC_WINDOWS,
   },
 };
 
@@ -219,4 +236,12 @@ export function documentHref(id: string): string {
 
 export function decisionHref(id: string): string {
   return recordHref('decision', id, '/decisions');
+}
+
+export function automationHref(id: string): string {
+  return recordHref('automation-rule', id, '/automations');
+}
+
+export function missionHref(id: string): string {
+  return recordHref('mission', id, '/missions');
 }

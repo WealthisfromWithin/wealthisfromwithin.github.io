@@ -13,10 +13,12 @@ import {
 } from './modules';
 import { routes } from './router';
 
-/** Wave 5 adds the seven cognition surfaces; Wave 6+ stays hidden. */
-const WAVE_5_ENABLED = [
+/** Wave 6 adds the four leverage surfaces; Wave 7 (Sync) stays hidden. */
+const WAVE_6_ENABLED = [
   'ai',
+  'analytics',
   'approvals',
+  'automations',
   'brief',
   'calendar',
   'content',
@@ -29,6 +31,8 @@ const WAVE_5_ENABLED = [
   'knowledge',
   'meetings',
   'memory',
+  'metrics',
+  'missions',
   'pipeline',
   'projects',
   'prompts',
@@ -42,8 +46,8 @@ function servedPaths(): string[] {
 }
 
 describe('module registry', () => {
-  it('enables exactly the Wave 1 through Wave 5 modules', () => {
-    expect(enabledModules().map((module) => module.id).sort()).toEqual(WAVE_5_ENABLED);
+  it('enables exactly the Wave 1 through Wave 6 modules', () => {
+    expect(enabledModules().map((module) => module.id).sort()).toEqual(WAVE_6_ENABLED);
   });
 
   it('splits the enabled modules across Commander and Operator', () => {
@@ -51,6 +55,8 @@ describe('module registry', () => {
       'brief',
       'approvals',
       'health',
+      'missions',
+      'metrics',
       'decisions',
     ]);
     expect(modulesByGroup('operator').map((module) => module.id)).toEqual([
@@ -68,6 +74,8 @@ describe('module registry', () => {
       'research',
       'ai',
       'prompts',
+      'automations',
+      'analytics',
       'integrations',
       'settings',
     ]);
@@ -82,13 +90,30 @@ describe('module registry', () => {
     }
   });
 
-  it('leaves every Wave 6+ module planned', () => {
+  it('leaves every Wave 7+ module planned', () => {
     for (const module of moduleRegistry) {
-      if (module.wave > 5) expect({ id: module.id, status: module.status }).toEqual({
+      if (module.wave > 6) expect({ id: module.id, status: module.status }).toEqual({
         id: module.id,
         status: 'planned',
       });
     }
+  });
+
+  it('enables every Wave 6 module the leverage wave promised', () => {
+    for (const id of ['automations', 'missions', 'metrics', 'analytics']) {
+      const module = moduleRegistry.find((entry) => entry.id === id);
+      expect({ id, wave: module?.wave, status: module?.status }).toEqual({
+        id,
+        wave: 6,
+        status: 'enabled',
+      });
+    }
+  });
+
+  it('keeps Command API Sync out of the router until there is an API to sync with', () => {
+    const sync = moduleRegistry.find((module) => module.id === 'sync');
+    expect({ status: sync?.status, wave: sync?.wave }).toEqual({ status: 'planned', wave: 7 });
+    expect(plannedModules().map((module) => module.id)).toEqual(['sync']);
   });
 
   it('enables every Wave 5 module the cognition wave promised', () => {
@@ -142,8 +167,11 @@ describe('module registry', () => {
     expect(findModuleByPath('/nowhere')).toBeUndefined();
   });
 
-  it('leaves Mission Control planned: it is not one of the audit Wave 3 items', () => {
-    expect(moduleRegistry.find((module) => module.id === 'missions')?.status).toBe('planned');
+  it('gives the MCP panel to the registry rather than a module of its own', () => {
+    // One table of integration state, read two ways: a top-level `/mcp` would
+    // need its own idea of Connected, and two sources of that answer drift.
+    expect(moduleRegistry.some((module) => module.path === '/mcp')).toBe(false);
+    expect(subRoutesOf('integrations').map((route) => route.path)).toEqual(['/integrations/mcp']);
   });
 
   it('has unique ids and paths', () => {
@@ -185,6 +213,8 @@ describe('module registry', () => {
       'knowledge-node',
       'document',
       'decision',
+      'automation-rule',
+      'mission',
     ]);
   });
 

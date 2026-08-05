@@ -78,6 +78,26 @@ export const moduleRegistry: readonly ModuleDefinition[] = [
     icon: Activity,
   },
   {
+    id: 'missions',
+    path: '/missions',
+    label: 'Mission Control',
+    group: 'commander',
+    status: 'enabled',
+    wave: 6,
+    summary: 'Objectives, and the local work that actually serves them.',
+    icon: Target,
+  },
+  {
+    id: 'metrics',
+    path: '/metrics',
+    label: 'Business Metrics',
+    group: 'commander',
+    status: 'enabled',
+    wave: 6,
+    summary: 'Financial KPIs counted from the local domain. No finance API is called.',
+    icon: ChartColumn,
+  },
+  {
     id: 'inbox',
     path: '/inbox',
     label: 'Inbox',
@@ -228,6 +248,26 @@ export const moduleRegistry: readonly ModuleDefinition[] = [
     icon: NotebookPen,
   },
   {
+    id: 'automations',
+    path: '/automations',
+    label: 'Automations',
+    group: 'operator',
+    status: 'enabled',
+    wave: 6,
+    summary: 'Local rules over the local store, with a gate before anything is written.',
+    icon: Workflow,
+  },
+  {
+    id: 'analytics',
+    path: '/analytics',
+    label: 'Analytics',
+    group: 'operator',
+    status: 'enabled',
+    wave: 6,
+    summary: 'How the surface is used and what the operation produced, counted locally.',
+    icon: Layers,
+  },
+  {
     id: 'integrations',
     path: '/integrations',
     label: 'Integrations',
@@ -248,13 +288,9 @@ export const moduleRegistry: readonly ModuleDefinition[] = [
     icon: Settings,
   },
 
-  // Mission Control is not one of the audit's Wave 3 items (§7 lists CRM,
-  // Pipeline, Tasks/Projects, Calendar/Meetings). It waits for the objective and
-  // prediction work it actually needs rather than shipping as a mission list.
-  { id: 'missions', path: '/missions', label: 'Mission Control', group: 'commander', status: 'planned', wave: 6, summary: 'Objectives, agents, predictions.', icon: Target },
-  { id: 'automations', path: '/automations', label: 'Automations', group: 'operator', status: 'planned', wave: 6, summary: 'Workflow leverage with approval gates.', icon: Workflow },
-  { id: 'metrics', path: '/metrics', label: 'Business Metrics', group: 'commander', status: 'planned', wave: 6, summary: 'Financial KPIs and leverage proof.', icon: ChartColumn },
-  { id: 'analytics', path: '/analytics', label: 'Analytics', group: 'operator', status: 'planned', wave: 6, summary: 'Learning loop reporting.', icon: Layers },
+  // Wave 7. It stays out of the nav and out of the router until there is a
+  // remote read-model to sync with: a route that syncs nothing is the fake
+  // inventory the audit exists to prevent (ARCHITECTURE_AUDIT §5.3).
   { id: 'sync', path: '/sync', label: 'Command API Sync', group: 'operator', status: 'planned', wave: 7, summary: 'Remote read-model and write-through.', icon: Database },
 ] as const;
 
@@ -312,6 +348,17 @@ export const subRoutes: readonly SubRouteDefinition[] = [
     label: 'Performance',
     summary: 'Recorded readings, what they suggest, and how large the sample is.',
   },
+  // MCP servers are integration rows, so the panel is a surface of the registry
+  // rather than a module of its own: one table of state, read two ways. A
+  // top-level `/mcp` would have to keep its own idea of Connected in step with
+  // the registry's, and two sources of that answer eventually disagree.
+  {
+    id: 'integrations-mcp',
+    moduleId: 'integrations',
+    path: '/integrations/mcp',
+    label: 'MCP Servers',
+    summary: 'Model Context Protocol servers and the state the registry records for each.',
+  },
 ] as const;
 
 /**
@@ -339,6 +386,10 @@ export const recordRoutes: readonly RecordRouteDefinition[] = [
   { id: 'knowledge-node', moduleId: 'knowledge', pattern: '/knowledge/node/:id' },
   { id: 'document', moduleId: 'documents', pattern: '/documents/doc/:id' },
   { id: 'decision', moduleId: 'decisions', pattern: '/decisions/entry/:id' },
+  // Wave 6 keeps the rule: the segment names the record type, so a rule id can
+  // never be read as a surface of the module that owns it.
+  { id: 'automation-rule', moduleId: 'automations', pattern: '/automations/rule/:id' },
+  { id: 'mission', moduleId: 'missions', pattern: '/missions/mission/:id' },
 ] as const;
 
 export function enabledModules(): ModuleDefinition[] {
