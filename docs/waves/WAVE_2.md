@@ -191,6 +191,38 @@ through both new surfaces against a real IndexedDB.
 | TD-21 | `Operator` is a hard-coded actor | Low | There is no identity on this surface, so `decidedBy` is a constant. Real attribution arrives with the auth gate (Wave 7). |
 | TD-22 | Inbox and queue have no bulk keyboard selection | Low | Actions are per row plus one bulk control. Full keyboard-first triage (j/k, x to select) is queued with the L2 palette a11y work. |
 
+## Fix pack (M1 — href allowlist)
+
+`docs/reviews/WAVE_2_GPT_REVIEW.md` M1 and the G3 gate
+(`docs/reviews/WAVE_2_G3_ALIGNMENT.md`) required closing the one mandatory gap
+before Wave 3: `Notification.href` was rendered through `Link` with no check
+that the string was actually an enabled internal route.
+
+- Added `normalizeInternalHref` / `isSafeInternalHref` (`src/app/href.ts`).
+  A href is safe only if it is exactly an enabled module path from
+  `moduleRegistry`, optionally followed by a known query variant for that path
+  (`/inbox?status=unread`, `/approvals?status=all`,
+  `/integrations?state=awaiting_credentials`, and the rest of each surface's
+  own filter set). Everything else — external URLs, protocol-relative URLs,
+  `javascript:`/`data:`/`mailto:` schemes, backslash tricks, malformed
+  strings, unknown query params, and planned-module paths like `/crm` —
+  falls back to a caller-supplied default instead of being handed to the
+  router.
+- Applied at every place a record-provided or computed href reaches
+  navigation: the Morning Brief's attention section (`src/modules/dashboard/brief.ts`,
+  falls back to `/inbox`), the Inbox row's `Open` link
+  (`src/modules/inbox/InboxPage.tsx`), and the command palette's search-result
+  navigation (`src/app/shell/CommandPalette.tsx`, falls back to `/`).
+- `src/app/href.test.ts` covers the unsafe cases from the review: `javascript:`
+  and `data:`/`mailto:` schemes, external absolute URLs, protocol-relative and
+  backslash-relative URLs, planned-module paths, malformed/empty strings, and
+  otherwise-enabled paths carrying an unknown query key or value.
+- No Wave 3 module work was touched; this is the fix pack only.
+
+Verification after the fix pack: `pnpm lint && pnpm typecheck && pnpm test &&
+pnpm build` — 114 tests (100 + 14 new), lint and typecheck clean, build
+succeeds with the pre-existing TD-16 chunk-size advisory.
+
 ## Deviations from the brief
 
 1. **The brief asked for a System Logs view "only if it reuses health/audit

@@ -1,4 +1,5 @@
 import type { SovereignDataset } from '@/data/dataset';
+import { normalizeInternalHref } from '@/app/href';
 import { DAY_MS, startOfDay, endOfDay } from '@/lib/clock';
 import { formatCurrencyCents, formatDelta, formatMetricValue } from '@/lib/format';
 import { priorityRank } from '@/domain';
@@ -62,7 +63,7 @@ function attentionSection(dataset: SovereignDataset, now: Date): BriefItem[] {
       meta: notification.origin,
       tone: notification.severity === 'critical' ? 'critical' : 'warning',
       demo: isDemo(notification.source),
-      href: notification.href ?? '/inbox',
+      href: normalizeInternalHref(notification.href, '/inbox'),
     });
   }
 

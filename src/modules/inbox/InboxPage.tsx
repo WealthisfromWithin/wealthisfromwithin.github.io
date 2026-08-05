@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSovereign } from '@/app/context';
+import { normalizeInternalHref } from '@/app/href';
 import { markAllNotificationsRead, setNotificationRead } from '@/data/mutations';
 import type { Notification } from '@/domain';
 import { relativeTime } from '@/lib/clock';
@@ -67,7 +68,7 @@ function NotificationRow({ notification, now }: { notification: Notification; no
       <div className="flex shrink-0 items-center gap-2 pt-0.5">
         {notification.href ? (
           <Link
-            to={notification.href}
+            to={normalizeInternalHref(notification.href, '/inbox')}
             className="label-caps border border-line px-2 py-0.5 text-faint transition-colors hover:border-gold/40 hover:text-ivory"
           >
             Open

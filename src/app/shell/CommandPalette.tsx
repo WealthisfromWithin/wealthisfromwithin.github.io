@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState, type KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CornerDownLeft } from 'lucide-react';
 import { usePalette, useSovereign } from '@/app/context';
+import { normalizeInternalHref } from '@/app/href';
 import { buildCommands, commandGroupLabel, type Command } from '@/commands/registry';
 import { db } from '@/data/db';
 import { markAllNotificationsRead } from '@/data/mutations';
@@ -92,7 +93,7 @@ function PaletteDialog() {
       if (row.kind === 'command') {
         void row.command.run();
       } else {
-        void navigate(row.document.route);
+        void navigate(normalizeInternalHref(row.document.route, '/'));
       }
     },
     [closePalette, navigate],
