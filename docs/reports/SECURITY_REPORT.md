@@ -33,6 +33,8 @@
 9. Integration secrets encrypted at rest on API.  
 10. GPT-5.5 security review gate each wave that touches auth, AI, or connectors.
 
+**Post–Wave 1 fix pack:** production source maps are now disabled (`build.sourcemap: false`), settling half of GPT review finding M3; the CSP on the built index (control 4) remains deferred to pre–private-data hardening (Wave 7) per the G3 architecture gate.
+
 ## Trust bug already shipping
 
 Substrate cards show **Healthy** / **Action Req** for systems this UI cannot probe. That is a security *and* product integrity issue: operators may believe monitoring exists. Wave 1–2 must replace with Registry truth.

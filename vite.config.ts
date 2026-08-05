@@ -15,7 +15,9 @@ export default defineConfig({
   },
   build: {
     target: 'es2022',
-    sourcemap: true,
+    // Production ships no source maps (M3, partial). The source is public on GitHub,
+    // so maps add no debugging value the repository does not already provide.
+    sourcemap: false,
   },
   test: {
     environment: 'jsdom',
