@@ -1,12 +1,23 @@
 import { Navigate, type RouteObject } from 'react-router-dom';
 import { AppShell } from './shell/AppShell';
-import { enabledModules } from './modules';
-import { ApprovalsPage } from '@/modules/approvals/ApprovalsPage';
+import { enabledModules, enabledRecordRoutes } from './modules';
 import { MorningBriefPage } from '@/modules/dashboard/MorningBriefPage';
-import { HealthPage } from '@/modules/health/HealthPage';
-import { InboxPage } from '@/modules/inbox/InboxPage';
-import { IntegrationsPage } from '@/modules/integrations/IntegrationsPage';
-import { SettingsPage } from '@/modules/settings/SettingsPage';
+import {
+  ApprovalsPage,
+  CalendarPage,
+  CompanyDetailPage,
+  CrmPage,
+  HealthPage,
+  InboxPage,
+  IntegrationsPage,
+  MeetingsPage,
+  OpportunityDetailPage,
+  PersonDetailPage,
+  PipelinePage,
+  ProjectsPage,
+  SettingsPage,
+  TasksPage,
+} from './lazyModules';
 
 /**
  * Only enabled modules get a route. A planned module resolves to the brief
@@ -18,8 +29,21 @@ const moduleElements: Record<string, RouteObject['element']> = {
   approvals: <ApprovalsPage />,
   health: <HealthPage />,
   inbox: <InboxPage />,
+  crm: <CrmPage />,
+  pipeline: <PipelinePage />,
+  tasks: <TasksPage />,
+  projects: <ProjectsPage />,
+  calendar: <CalendarPage />,
+  meetings: <MeetingsPage />,
   integrations: <IntegrationsPage />,
   settings: <SettingsPage />,
+};
+
+/** Keyed by the record-route id declared in the registry. */
+const recordElements: Record<string, RouteObject['element']> = {
+  'crm-person': <PersonDetailPage />,
+  'crm-company': <CompanyDetailPage />,
+  'pipeline-opportunity': <OpportunityDetailPage />,
 };
 
 function buildModuleRoutes(): RouteObject[] {
@@ -34,10 +58,22 @@ function buildModuleRoutes(): RouteObject[] {
   });
 }
 
+function buildRecordRoutes(): RouteObject[] {
+  return enabledRecordRoutes().flatMap((record) => {
+    const element = recordElements[record.id];
+    if (!element) return [];
+    return [{ path: record.pattern.replace(/^\//, ''), element }];
+  });
+}
+
 export const routes: RouteObject[] = [
   {
     path: '/',
     element: <AppShell />,
-    children: [...buildModuleRoutes(), { path: '*', element: <Navigate to="/" replace /> }],
+    children: [
+      ...buildModuleRoutes(),
+      ...buildRecordRoutes(),
+      { path: '*', element: <Navigate to="/" replace /> },
+    ],
   },
 ];

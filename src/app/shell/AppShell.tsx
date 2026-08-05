@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { usePalette } from '@/app/context';
 import { CommandPalette } from './CommandPalette';
@@ -49,7 +49,12 @@ export function AppShell() {
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />
         <main className="min-h-0 flex-1 overflow-y-auto">
-          <Outlet />
+          {/* Module chunks load on demand (TD-16); the shell stays on screen. */}
+          <Suspense
+            fallback={<p className="px-6 py-6 text-sm text-faint italic">Loading module…</p>}
+          >
+            <Outlet />
+          </Suspense>
         </main>
       </div>
       <CommandPalette />
