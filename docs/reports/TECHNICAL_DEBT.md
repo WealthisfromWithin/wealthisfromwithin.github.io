@@ -37,6 +37,9 @@ Debt is dominated by **absence of an application**, not by messy application cod
 | TD-23 | Record hrefs validate id shape, not id existence | Low | Wave 7 |
 | TD-24 | Selector modules load eagerly via the href allowlist | Low | Wave 7 |
 | TD-25 | No blocked-reason capture when a task is blocked from the UI | Low | Wave 4 |
+| TD-26 | Compliance policy is hard-coded and unversioned against what it checked | Low | Wave 6 |
+| TD-27 | Content readings are assumed cumulative with nothing enforcing it | Low | Wave 5 |
+| TD-28 | Hub sub-routes have no distinct sidebar state | Low | Wave 6 |
 
 ## Interest (cost of waiting)
 
@@ -76,3 +79,17 @@ Every day the poster stays live trains the operator to distrust Substrate health
 | TD-20 | **Larger.** Task transitions, stage moves, and meeting notes append to the same unbounded activity log. Demo-sourced rows still clear with the demo; operator-sourced ones still grow. Retention remains Wave 7. |
 | TD-03 | **Held.** Expected value, project progress, relationship temperature, and stall age are arithmetic over stored fields. Nothing on the new surfaces is modelled, predicted, or fabricated. |
 | TD-10 | **Unchanged.** Still no probes; health still reports `offline`. The CRM connectors Wave 3 would want stay `awaiting_credentials`. |
+
+## Wave 4 paydown (`docs/waves/WAVE_4.md`)
+
+| ID | Status after Wave 4 |
+|----|---------------------|
+| TD-08 | **Partly paid, further.** ContentDone's domain — ideas, campaigns, assets, templates, hooks, CTAs, variants, metrics — is now defined once in `src/domain/entities.ts`, and the compliance policy sits beside it in `src/domain/compliance.ts` rather than in a module. The cross-repo contract is still Wave 7 sync. |
+| TD-16 | **Held, slightly larger.** Seven content pages ship as seven lazy chunks (48.9 KB of the 120.49 KB now deferred), but the first load grew to 582.31 KB raw / 181.65 KB gzip, most of it the seed. Vendor chunking is still the only thing that moves the advisory. |
+| TD-17 | **Held.** Every content writer stamps `touchedAt`; an approval, a schedule, or a recorded publish survives the 12-hour reseed. |
+| TD-19 | **Held.** Ten new writers, same module. The content writers return `{ ok, reason, compliance }` instead of a boolean, which the older writers should probably adopt. |
+| TD-20 | **Larger.** Content status changes, idea captures, and promotions append to the same unbounded log. Retention remains Wave 7. |
+| TD-03 | **Held.** Engagement rate, idea score, campaign counts, and the monthly comparison are arithmetic over stored readings, each printed with its sample size. An item with no reading shows no performance rather than a zero. |
+| TD-10 | **Unchanged.** No probes. LinkedIn, Facebook, and the n8n publishing webhook stay `awaiting_credentials`, and the Content OS says so wherever a publish would otherwise be implied. |
+| TD-24 | **Larger.** The href allowlist now reads the content filter constants too, so more selector code lands in the shared chunk. Same Wave 7 fix. |
+| TD-25 | **Held.** `setContentStatus` can write `blocked`, but no surface collects a reason, so blocked packages still arrive only from the seed. |

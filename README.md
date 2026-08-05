@@ -4,11 +4,14 @@ HermesBrain Sovereign Mission Command — the operating system for the business.
 
 ## Status
 
-**Wave 1 — Foundation shell: complete** (G2 approve-with-changes, G3 pass, fix
-pack applied). **Wave 2 — Attention OS: complete, awaiting review.** The surface
-can now be acted on: approvals are granted or refused, signals are marked read,
-and both persist in the local store. Health is projected from the Integration
-Registry and still reports the truth — no probe has run.
+**Wave 1 — Foundation shell** and **Wave 2 — Attention OS** are complete and
+gated. **Wave 3 — Revenue & Relationships** shipped CRM, Pipeline, Tasks,
+Projects, Calendar, and Meetings with three record detail routes. **Wave 4 —
+Content Operating System: complete, awaiting review.** `/content` is a
+production loop: capture, draft, gate, schedule, record, learn. Nothing
+publishes from this bundle — no connector here holds a credential, and the
+surface says so rather than implying otherwise. Health is still projected from
+the Integration Registry; no probe has run.
 
 ## Run it
 
@@ -32,23 +35,30 @@ Requires Node 22+ and pnpm 10+.
 | `/approvals` | Approval Queue | Human gates; approve, reject, and reopen persist in IndexedDB |
 | `/health` | Health Monitor | Registry-derived substrate truth plus the recorded activity log |
 | `/inbox` | Inbox | Every signal, filtered by read state and severity; read state is written through |
+| `/crm` | CRM | People and companies, with person and company detail routes |
+| `/pipeline` | Pipeline | Opportunities by stage with an opportunity detail route |
+| `/tasks` | Tasks | Execution across projects; status, priority, and creation persist |
+| `/projects` | Projects | Progress counted from linked tasks |
+| `/calendar` | Calendar | One week of meetings and due work |
+| `/meetings` | Meetings | Meeting records with an inline notes editor |
+| `/content` | Content OS | Production queue, plus `ideas`, `calendar`, `campaigns`, `library`, `analytics`, and `item/:id` |
 | `/integrations` | Integration Registry | 27 connectors: Connected, Disabled, or Awaiting Credentials |
 | `/settings` | Settings | Local store controls, credential reality, kernel status, roadmap |
 
 `⌘K` / `Ctrl+K` opens the command palette. `/` opens global search.
 
-Fourteen further modules are registered but have no route and never appear in
-navigation. See `docs/waves/WAVE_2.md`.
+Nine further modules are registered but have no route and never appear in
+navigation. See `docs/waves/WAVE_4.md`.
 
 ## Start here
 
 1. [`ARCHITECTURE_AUDIT.md`](./ARCHITECTURE_AUDIT.md) — repository intelligence & recommended architecture
 2. [`docs/MODEL_WORKFLOW.md`](./docs/MODEL_WORKFLOW.md) — Grok / Claude / GPT ownership rules
 3. [`docs/IMPLEMENTATION_PLAN.md`](./docs/IMPLEMENTATION_PLAN.md) — Wave 1 brief
-4. [`docs/IMPLEMENTATION_PLAN_WAVE_2.md`](./docs/IMPLEMENTATION_PLAN_WAVE_2.md) — Wave 2 brief
-5. [`docs/waves/WAVE_1.md`](./docs/waves/WAVE_1.md) — what Wave 1 delivered, deferred, and deviated on
-6. [`docs/waves/WAVE_2.md`](./docs/waves/WAVE_2.md) — what Wave 2 delivered, deferred, and deviated on
-7. [`docs/reports/`](./docs/reports/) — debt, integrations, security, performance, matrix, roadmap
+   (Waves 2–4 have their own `IMPLEMENTATION_PLAN_WAVE_*.md`)
+4. [`docs/waves/`](./docs/waves/) — what each wave delivered, deferred, and deviated on
+5. [`docs/reviews/`](./docs/reviews/) — G2 reviews and G3 alignment gates
+6. [`docs/reports/`](./docs/reports/) — debt, integrations, security, performance, matrix, roadmap
 
 ## Layout
 
