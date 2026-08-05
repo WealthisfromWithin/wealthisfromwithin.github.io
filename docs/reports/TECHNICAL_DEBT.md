@@ -137,3 +137,41 @@ Every day the poster stays live trains the operator to distrust Substrate health
 | TD-28 | **Partly paid.** The MCP sub-route gets the same tab strip the Content OS has, so a nested surface is reachable and legible from its module. The sidebar still highlights only the module. |
 | TD-05 / TD-29 / TD-30 / TD-31 | **Held.** Untouched by this wave. |
 | TD-10 | **Unchanged.** Still no probes, and now stated per row: every connector and every MCP server prints *never probed*. |
+
+## Wave 7 paydown (`docs/waves/WAVE_7.md`)
+
+| ID | Status after Wave 7 |
+|----|---------------------|
+| TD-16 | **Substantially paid, and one claim corrected.** Vendor chunking splits React, Dexie, and Zod into separately cacheable chunks, and the demo seed is dynamically imported. First load fell from 692.21 kB raw / 210.16 kB gzip to **639.46 kB / 195.60 kB**, meeting the Wave 1 target of under 200 kB gzip for the first time — in a wave that also added a module. **The chunk-size advisory this item tracked does not fire, and did not fire at Wave 6 either:** rebuilding `cf8c64d` on the current toolchain emits no warning, because the largest chunk was 364.83 kB. The "one chunk-size advisory" recorded in the Wave 6 note does not reproduce and was carried forward rather than re-observed. What remains is `vendor-react` at 86.21 kB gzip (only a smaller framework moves it) and eager zod validation at 17.23 kB. |
+| TD-10 | **Partly paid — the first probe in the platform's history.** `/sync` runs a real `GET /health` against a configured base URL and writes the result, with its timestamp, through `recordIntegrationProbe`. The Health Monitor's "N of M substrate systems verified" becomes true arithmetic the moment one succeeds. Capped hard: **1 of 29 connectors has a probe path**, because the other 28 need a credential this bundle cannot hold. Closes with the server-side vault. |
+| TD-07 | **Partly paid, further.** The Pages-safe credential model is now enforced rather than asserted. Both URL-taking adapters refuse before sending: the Command API adapter rejects userinfo, query strings, fragments, and non-HTTPS on public hosts; the local model adapter rejects any non-loopback host. `/sync` prints only the **host** of a configured base URL, never the full URL, because a misconfigured value can carry userinfo. Still no vault — that is the Command API's job. |
+| TD-12 | **Paid.** The seven Phase 17 documents exist under `docs/` and are written against measured facts: 30 stores, six migrations, 50 writers, two outbound `fetch` call sites, 639.46 kB first load. This closes item 8 of `ARCHITECTURE_AUDIT.md` §10. |
+| TD-03 | **Held, and structurally reinforced.** Nothing in Wave 7 renders a figure that was not counted, and the connected-probe invariant removes the last place where a *state* could be displayed without evidence behind it. Fake telemetry was the debt; an unevidenced Connected was its last hiding place. |
+| TD-17 | **Held.** `recordIntegrationProbe` stamps `touchedAt`, so a probed registry row survives the 12-hour reseed. The seed version deliberately stays at `wave6.0` — nothing about the seed's shape changed, and bumping it would rebuild demo rows for no reason. |
+| TD-19 | **Held.** One new writer in the same module, keeping the `{ ok, reason }` shape. It is the first writer that is also a *gate*: it is the only path that can set `connected`, and it refuses rather than writes when the evidence is missing. |
+| TD-20 | **Larger, marginally.** Probe results append to the same unbounded activity log. Retention is still unbuilt and now has two unbounded tables plus a third writer feeding one of them. This is the highest-value unpaid item that needs no server. |
+| TD-21 | **Held.** A probe is recorded as `system` rather than `Operator`, which is arguably the first honest actor value in the codebase — but the hard-coded `Operator` remains everywhere else. |
+| TD-24 | **Held, and now measured.** The href allowlist still imports filter constants from a dozen selector modules, dragging their siblings into the eager `index` chunk. Wave 7 can finally put a number on it: `index` is 127.42 kB raw / 37.26 kB gzip, and declaring filter values as data rather than importing them is the largest remaining build win. |
+| TD-23 | **Held.** Record hrefs still validate id shape, not existence. `/sync` adds no record route. |
+| TD-05 / TD-06 / TD-08 / TD-09 / TD-15 | **Held.** All five need the Command API. Wave 7 built the adapter's *boundary* and declared what sits on the far side of it; it did not cross it. |
+| TD-13 | **Held.** `DEPLOYMENT.md` now exists in this repository and is accurate for this repository. The org-path drift in ContentDone's copy is that repository's to fix. |
+| TD-18 | **Unchanged, and owner-blocked.** The Pages source must be switched to GitHub Actions in repository settings. Nothing in this repo can assert it, and until it is set the workflow succeeds while nothing ships. |
+| TD-25 / TD-26 / TD-27 / TD-28 / TD-29 / TD-30 / TD-31 / TD-32 / TD-33 / TD-34 / TD-35 | **Held.** Untouched by this wave. TD-35 (duplicated window arithmetic) and TD-32 (per-rule table scans) are the two most likely to bite first. |
+
+**No new debt was filed in Wave 7.** The wave added one module, one writer, one
+build plugin, and 850 lines of source — and each was built against the existing
+contracts rather than beside them. The debt that grew, grew because existing
+mechanisms were used more (TD-20), not because a new mechanism was introduced.
+
+### Unpaid items now overdue
+
+Five items were nominally due by Wave 7 and are not paid. They are listed here
+rather than quietly re-dated:
+
+| ID | Item | Why it slipped |
+|----|------|----------------|
+| TD-20 | Retention on `events` and `automationRuns` | Needs no server and was not scoped into any wave. **The most overdue item on the register** |
+| TD-21 | Hard-coded `Operator` actor | Genuinely blocked — there is no identity without auth |
+| TD-23 | Hrefs validate shape, not existence | Low value while the degraded state ("Not in the local store") is correct and legible |
+| TD-24 | Eager selector loading via the allowlist | Deferred while the performance target was unmet; now that it is met, this is optimisation rather than necessity |
+| TD-31 / TD-32 | Whole-table scans | Correct at every scale this store has reached. Fixing them now would be optimising against a load that does not exist |
