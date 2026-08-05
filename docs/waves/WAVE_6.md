@@ -283,10 +283,10 @@ and only the Wave 7 vendor-chunking pass moves it.
 |---------|--------|
 | `pnpm lint` | 0 errors, 0 warnings |
 | `pnpm typecheck` | clean |
-| `pnpm test` | **853 tests, 63 files, passing** (Wave 5: 644 / 49) |
+| `pnpm test` | **856 tests, 64 files, passing** (Wave 5: 644 / 49) |
 | `pnpm build` | success — 692.18 kB first load + 40 lazy chunks, one chunk-size advisory (TD-16) |
 
-209 tests were added, 199 of them in 14 new files:
+212 tests were added, 202 of them in 15 new files:
 
 - `src/domain/leverage.test.ts` (25) — trigger evaluation across every readiness
   state, gate helpers, hand-off refusal, stall and past-due arithmetic, and the
@@ -298,6 +298,10 @@ and only the Wave 7 vendor-chunking pass moves it.
   allocation, a blocked move refused with no reason, progress clamping, and
   `touchedAt` on every writer. Includes an assertion that the Wave 4 content gate
   path is untouched.
+- `src/data/db.test.ts` (3) — the first migration regression in this codebase,
+  because version 6 is the first schema change that rewrites rows: a store
+  created at version 5 opens at 6 with its mission intact, `successMeasure`
+  backfilled, and the two leverage tables present and empty.
 - Selector suites — `automations` (18), `missions` (16), `analytics` (20),
   `metrics` (24), `mcp` (12): filters and grouping, run ordering, gate lookup,
   rollups that count links without double-counting, window arithmetic, medians

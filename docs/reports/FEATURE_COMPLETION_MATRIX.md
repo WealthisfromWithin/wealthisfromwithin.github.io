@@ -71,7 +71,7 @@ hold or an observer this platform deliberately does not ship.
 | Enabled modules | 0 | 3 | 6 | 12 | 13 | 20 | 24 |
 | Nested sub-routes | 0 | 0 | 0 | 0 | 5 | 5 | 6 |
 | Record detail routes | 0 | 0 | 0 | 3 | 4 | 7 | 9 |
-| Tests | 0 | 46 | 114 | 281 | 396 | 612 | 853 |
+| Tests | 0 | 46 | 114 | 281 | 396 | 612 | 856 |
 
 The Wave 4 test figure is the one recorded at the gate; the M1 fix pack took it
 to 409 before Wave 5 began, and the H1 fix pack took Wave 5 to 644 before Wave 6
