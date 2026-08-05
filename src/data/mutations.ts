@@ -1,14 +1,28 @@
 import { db, type SovereignDb } from './db';
 import {
+  automationDeferredAction,
+  automationOpensGate,
+  automationReadiness,
+  automationTriggerHref,
   canTransitionContent,
   canTransitionDecision,
+  canTransitionMission,
   checkContent,
   contentComplianceInputs,
+  evaluateAutomation,
+  missionNeedsReason,
   type ActivityEvent,
   type AgentMessage,
   type AgentSession,
   type Approval,
   type ApprovalStatus,
+  type AutomationAction,
+  type AutomationContext,
+  type AutomationMatch,
+  type AutomationOutcome,
+  type AutomationRule,
+  type AutomationRun,
+  type AutomationTrigger,
   type ComplianceResult,
   type ContentIdea,
   type ContentItem,
@@ -21,6 +35,8 @@ import {
   type MemoryEntry,
   type MemoryKind,
   type MemoryScope,
+  type Mission,
+  type MissionStatus,
   type Notification,
   type PipelineStage,
   type Priority,
@@ -102,6 +118,8 @@ export interface ApprovalDecisionResult {
   ok: boolean;
   reason?: string;
   compliance?: ComplianceResult;
+  /** Set when the gate belonged to an automation run, which moved with it. */
+  automationOutcome?: AutomationOutcome;
 }
 
 const alreadyDecided: Record<ApprovalStatus, string> = {
@@ -140,6 +158,11 @@ async function writeApprovalDecision(
  * so the queue can never report a gate as closed while the copy it holds is
  * still in review. `override` carries the operator's decision to approve copy
  * the local compliance check refused, exactly as the package page does.
+ *
+ * A gate an automation run opened is the same shape of problem: the run is the
+ * other half, so the decision moves it too (Wave 6). A queue that could close an
+ * automation gate while the run behind it still read "waiting" would be the same
+ * disagreement in a different module.
  */
 export async function decideApproval(
   id: string,
@@ -150,7 +173,14 @@ export async function decideApproval(
 ): Promise<ApprovalDecisionResult> {
   return database.transaction(
     'rw',
-    [database.approvals, database.contentItems, database.notifications, database.events],
+    [
+      database.approvals,
+      database.contentItems,
+      database.automations,
+      database.automationRuns,
+      database.notifications,
+      database.events,
+    ],
     async () => {
       const approval = await database.approvals.get(id);
       if (!approval) return { ok: false, reason: 'No gate with that id is in the local store.' };
@@ -170,6 +200,13 @@ export async function decideApproval(
         if (!result.ok) return result;
         await writeApprovalDecision(approval, status, database, now);
         return { ok: true, compliance: result.compliance };
+      }
+
+      if (approval.automationRunId !== undefined) {
+        const result = await decideAutomationGate(approval, status, database, now);
+        if (!result.ok) return result;
+        await writeApprovalDecision(approval, status, database, now);
+        return result;
       }
 
       await writeApprovalDecision(approval, status, database, now);
@@ -1931,6 +1968,604 @@ export async function runAgentTurn(
   );
 
   return { ok: result.ok, reason: result.ok ? undefined : result.message, result };
+}
+
+/* ── Wave 6: the leverage fabric ─────────────────────────────────────────── */
+
+/**
+ * Automation writes are `automation`-channel events, which is the channel the
+ * Health log and the Brief already treat as "something acted without being
+ * asked twice". A run inherits the provenance of its rule: a run of a demo rule
+ * is demo history and clears with the demo, exactly like `activityFor`.
+ */
+function automationEvent(
+  record: { id: string; source: ActivityEvent['source'] },
+  prefix: string,
+  title: string,
+  detail: string,
+  now: Date,
+): ActivityEvent {
+  return activityFor(record, prefix, 'automation', title, detail, now);
+}
+
+export interface NewAutomationRule {
+  name: string;
+  summary?: string;
+  trigger: AutomationTrigger;
+  action: AutomationAction;
+  enabled?: boolean;
+  requiresApproval?: boolean;
+  impact?: Approval['risk'];
+  requiresIntegrationId?: string;
+  notes?: string;
+}
+
+export async function createAutomationRule(
+  input: NewAutomationRule,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<AutomationRule | null> {
+  const name = input.name.trim();
+  if (name.length === 0) return null;
+
+  const stamp = now.toISOString();
+  const rule: AutomationRule = {
+    id: localId('aut', now),
+    source: 'local',
+    createdAt: stamp,
+    updatedAt: stamp,
+    touchedAt: stamp,
+    name,
+    summary: input.summary?.trim() ?? '',
+    trigger: input.trigger,
+    action: input.action,
+    enabled: input.enabled ?? true,
+    // WITHIN default: a rule that writes anything passes a human gate until the
+    // operator decides otherwise on the rule itself.
+    requiresApproval: input.requiresApproval ?? true,
+    impact: input.impact ?? 'info',
+    requiresIntegrationId: input.requiresIntegrationId,
+    notes: input.notes?.trim() ?? '',
+    runCount: 0,
+  };
+
+  await database.transaction('rw', [database.automations, database.events], async () => {
+    await database.automations.add(rule);
+    await database.events.put(
+      automationEvent(rule, 'automation', `Automation defined: ${rule.name}`, rule.summary, now),
+    );
+  });
+
+  return rule;
+}
+
+export async function setAutomationEnabled(
+  id: string,
+  enabled: boolean,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<boolean> {
+  return database.transaction('rw', [database.automations, database.events], async () => {
+    const rule = await database.automations.get(id);
+    if (!rule || rule.enabled === enabled) return false;
+
+    const stamp = now.toISOString();
+    await database.automations.update(id, { enabled, updatedAt: stamp, touchedAt: stamp });
+    await database.events.put(
+      automationEvent(
+        rule,
+        'automation',
+        `Automation ${enabled ? 'enabled' : 'disabled'}: ${rule.name}`,
+        enabled ? 'It will evaluate when the operator runs it.' : 'A disabled rule refuses to run.',
+        now,
+      ),
+    );
+    return true;
+  });
+}
+
+/** Archived rather than deleted: a rule that ran is part of the record. */
+export async function archiveAutomationRule(
+  id: string,
+  archived: boolean,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const stamp = now.toISOString();
+  const updated = await database.automations.update(id, {
+    archivedAt: archived ? stamp : undefined,
+    enabled: archived ? false : undefined,
+    updatedAt: stamp,
+    touchedAt: stamp,
+  });
+  return updated > 0;
+}
+
+/** The slice of the store a trigger may read, loaded once per run. */
+async function readAutomationContext(database: SovereignDb): Promise<AutomationContext> {
+  const [
+    tasks,
+    contentItems,
+    opportunities,
+    approvals,
+    decisions,
+    memoryEntries,
+    researchItems,
+    integrations,
+  ] = await Promise.all([
+    database.tasks.toArray(),
+    database.contentItems.toArray(),
+    database.opportunities.toArray(),
+    database.approvals.toArray(),
+    database.decisions.toArray(),
+    database.memoryEntries.toArray(),
+    database.researchItems.toArray(),
+    database.integrations.toArray(),
+  ]);
+
+  return {
+    tasks,
+    contentItems,
+    opportunities,
+    approvals,
+    decisions,
+    memoryEntries,
+    researchItems,
+    integrations,
+  };
+}
+
+function matchSummary(matches: readonly AutomationMatch[]): string {
+  const named = matches.slice(0, 3).map((match) => match.label);
+  const rest = matches.length - named.length;
+  return rest > 0 ? `${named.join('; ')} and ${String(rest)} more` : named.join('; ');
+}
+
+export interface AutomationRunResult {
+  ok: boolean;
+  outcome?: AutomationOutcome;
+  reason?: string;
+  run?: AutomationRun;
+}
+
+/**
+ * Runs one rule against the local store, and the only path by which an
+ * automation can write anything.
+ *
+ * Every branch ends in a recorded run, including the two that do nothing: a rule
+ * that cannot run is `refused` with the reason named, and a rule that matched
+ * nothing is `no_match`. Neither is a silent skip, because a fabric whose
+ * inaction is invisible is a fabric nobody can trust.
+ *
+ * Runs are operator-invoked. There is no scheduler on this surface and nothing
+ * here claims one: `invokedBy` records who asked.
+ */
+export async function runAutomation(
+  id: string,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<AutomationRunResult> {
+  const rule = await database.automations.get(id);
+  if (!rule) {
+    return { ok: false, reason: 'No automation with that id is in the local store.' };
+  }
+
+  const context = await readAutomationContext(database);
+  const readiness = automationReadiness(rule, context.integrations);
+  const matches = readiness.runnable ? evaluateAutomation(rule, context, now) : [];
+  const stamp = now.toISOString();
+
+  const opensGate = readiness.runnable && matches.length > 0 && automationOpensGate(rule);
+  const approvalId = opensGate ? localId('apr', now) : undefined;
+
+  const outcome: AutomationOutcome = !readiness.runnable
+    ? 'refused'
+    : matches.length === 0
+      ? 'no_match'
+      : opensGate
+        ? 'gated'
+        : 'applied';
+
+  const writesSignal = outcome === 'applied' && rule.action === 'notify';
+  const notificationId = writesSignal ? localId('n', now) : undefined;
+
+  const detail = !readiness.runnable
+    ? readiness.statement
+    : matches.length === 0
+      ? 'Nothing matched. The run is recorded anyway.'
+      : opensGate
+        ? `${String(matches.length)} matched. Waiting on the gate before anything is written.`
+        : writesSignal
+          ? `${String(matches.length)} matched. One signal written: ${matchSummary(matches)}.`
+          : `${String(matches.length)} matched. Recorded, nothing written.`;
+
+  const run: AutomationRun = {
+    id: localId('run', now),
+    source: rule.source,
+    createdAt: stamp,
+    updatedAt: stamp,
+    touchedAt: stamp,
+    ruleId: rule.id,
+    at: stamp,
+    outcome,
+    reason: readiness.reason,
+    matched: matches.length,
+    matchedIds: matches.map((match) => match.id),
+    detail,
+    notificationId,
+    approvalId,
+    invokedBy: OPERATOR,
+  };
+
+  await database.transaction(
+    'rw',
+    [
+      database.automations,
+      database.automationRuns,
+      database.approvals,
+      database.notifications,
+      database.events,
+    ],
+    async () => {
+      await database.automationRuns.add(run);
+
+      if (approvalId !== undefined) {
+        const gate: Approval = {
+          id: approvalId,
+          source: rule.source,
+          createdAt: stamp,
+          updatedAt: stamp,
+          touchedAt: stamp,
+          title: `Automation: ${rule.name}`,
+          requestedBy: `Automation · ${rule.name}`,
+          kind: 'automation',
+          risk: rule.impact,
+          status: 'pending',
+          summary:
+            automationDeferredAction(rule) === 'notify'
+              ? `${String(matches.length)} matched: ${matchSummary(matches)}. Approving writes one inbox signal; nothing is published or sent either way.`
+              : `${String(matches.length)} matched: ${matchSummary(matches)}. The gate is the whole action.`,
+          automationRunId: run.id,
+        };
+        await database.approvals.add(gate);
+      }
+
+      if (notificationId !== undefined) {
+        await database.notifications.add(
+          automationNotification(rule, matches, notificationId, stamp),
+        );
+      }
+
+      await database.automations.update(rule.id, {
+        lastRunAt: stamp,
+        runCount: rule.runCount + 1,
+        updatedAt: stamp,
+        touchedAt: stamp,
+      });
+
+      await database.events.put(
+        automationEvent(
+          run,
+          'automation-run',
+          `Automation ${outcome === 'no_match' ? 'ran with no match' : outcome}: ${rule.name}`,
+          detail,
+          now,
+        ),
+      );
+    },
+  );
+
+  return {
+    ok: outcome !== 'refused',
+    outcome,
+    reason: outcome === 'refused' ? readiness.statement : undefined,
+    run,
+  };
+}
+
+/** One signal per run, naming what matched. Never one signal per matched record. */
+function automationNotification(
+  rule: AutomationRule,
+  matches: readonly AutomationMatch[],
+  id: string,
+  stamp: string,
+): Notification {
+  return {
+    id,
+    source: rule.source,
+    createdAt: stamp,
+    updatedAt: stamp,
+    touchedAt: stamp,
+    title: `Automation: ${String(matches.length)} ${
+      matches.length === 1 ? 'record matches' : 'records match'
+    } "${rule.name}"`,
+    body: `${matchSummary(matches)}. Written by a local rule; nothing was sent anywhere.`,
+    severity: rule.impact,
+    read: false,
+    origin: 'Automation',
+    href: automationTriggerHref[rule.trigger],
+  };
+}
+
+/**
+ * Runs every enabled rule, in registration order, and reports each result. A
+ * refusal does not stop the pass: the operator asked what the whole fabric would
+ * do, and a rule that cannot run is part of that answer.
+ */
+export async function runEnabledAutomations(
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<AutomationRunResult[]> {
+  const rules = (await database.automations.toArray()).filter(
+    (rule) => rule.enabled && rule.archivedAt === undefined,
+  );
+
+  const results: AutomationRunResult[] = [];
+  for (const rule of rules) {
+    results.push(await runAutomation(rule.id, database, now));
+  }
+  return results;
+}
+
+/**
+ * Moves the run behind an automation gate when the gate is decided. Approving
+ * carries out the effect the rule deferred — which is only ever one inbox
+ * signal — and rejecting records the refusal against the run.
+ *
+ * Reopening a gate whose signal was already written is refused. The signal
+ * exists and was read; pretending the run is waiting again would make the run
+ * log describe a state the inbox contradicts.
+ */
+async function decideAutomationGate(
+  approval: Approval,
+  status: ApprovalStatus,
+  database: SovereignDb,
+  now: Date,
+): Promise<ApprovalDecisionResult> {
+  const run =
+    approval.automationRunId === undefined
+      ? undefined
+      : await database.automationRuns.get(approval.automationRunId);
+  if (!run) {
+    return { ok: false, reason: 'The automation run behind this gate is not in the local store.' };
+  }
+
+  const rule = await database.automations.get(run.ruleId);
+  if (!rule) {
+    return { ok: false, reason: 'The automation rule behind this gate is not in the local store.' };
+  }
+
+  const stamp = now.toISOString();
+
+  if (status === 'pending') {
+    if (run.notificationId !== undefined) {
+      return {
+        ok: false,
+        reason: 'This run already wrote its signal. Reopening the gate would not unwrite it.',
+      };
+    }
+    await database.automationRuns.update(run.id, {
+      outcome: 'gated',
+      reason: undefined,
+      updatedAt: stamp,
+      touchedAt: stamp,
+    });
+    await database.events.put(
+      automationEvent(run, 'automation-gate', `Automation gate reopened: ${rule.name}`, run.detail, now),
+    );
+    return { ok: true, automationOutcome: 'gated' };
+  }
+
+  if (status === 'rejected') {
+    await database.automationRuns.update(run.id, {
+      outcome: 'declined',
+      reason: 'gate_rejected',
+      detail: `${run.detail} The gate was rejected, so nothing was written.`,
+      updatedAt: stamp,
+      touchedAt: stamp,
+    });
+    await database.events.put(
+      automationEvent(
+        run,
+        'automation-gate',
+        `Automation refused at the gate: ${rule.name}`,
+        `${String(run.matched)} matched, nothing written.`,
+        now,
+      ),
+    );
+    return { ok: true, automationOutcome: 'declined' };
+  }
+
+  const deferred = automationDeferredAction(rule);
+  let notificationId: string | undefined;
+
+  if (deferred === 'notify') {
+    notificationId = localId('n', now);
+    // The gate held the summary; the signal repeats it rather than re-evaluating,
+    // so what a human approved is what gets written.
+    await database.notifications.add({
+      id: notificationId,
+      source: rule.source,
+      createdAt: stamp,
+      updatedAt: stamp,
+      touchedAt: stamp,
+      title: `Automation: ${String(run.matched)} ${
+        run.matched === 1 ? 'record matched' : 'records matched'
+      } "${rule.name}"`,
+      body: `${approval.summary} Approved at the gate.`,
+      severity: rule.impact,
+      read: false,
+      origin: 'Automation',
+      href: automationTriggerHref[rule.trigger],
+    });
+  }
+
+  await database.automationRuns.update(run.id, {
+    outcome: 'applied',
+    reason: undefined,
+    notificationId,
+    detail:
+      deferred === 'notify'
+        ? `${run.detail} Approved at the gate, and one signal written.`
+        : `${run.detail} Cleared at the gate.`,
+    updatedAt: stamp,
+    touchedAt: stamp,
+  });
+
+  await database.events.put(
+    automationEvent(
+      run,
+      'automation-gate',
+      `Automation cleared at the gate: ${rule.name}`,
+      deferred === 'notify' ? 'One signal written to the inbox.' : 'Nothing further to write.',
+      now,
+    ),
+  );
+
+  return { ok: true, automationOutcome: 'applied' };
+}
+
+/* ── Missions ───────────────────────────────────────────────────────────── */
+
+export interface MissionWriteResult {
+  ok: boolean;
+  reason?: string;
+}
+
+export interface NewMission {
+  title: string;
+  code?: string;
+  objective?: string;
+  successMeasure?: string;
+  dueAt?: string;
+}
+
+export async function captureMission(
+  input: NewMission,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<Mission | null> {
+  const title = input.title.trim();
+  if (title.length === 0) return null;
+
+  const stamp = now.toISOString();
+  const existing = await database.missions.count();
+  const mission: Mission = {
+    id: localId('msn', now),
+    source: 'local',
+    createdAt: stamp,
+    updatedAt: stamp,
+    touchedAt: stamp,
+    code: input.code?.trim() ?? `MSN-${String(existing + 1).padStart(3, '0')}`,
+    title,
+    objective: input.objective?.trim() ?? '',
+    status: 'active',
+    // A new objective has produced nothing yet, and says so.
+    progress: 0,
+    successMeasure: input.successMeasure?.trim() ?? '',
+    dueAt: input.dueAt,
+  };
+
+  await database.transaction('rw', [database.missions, database.events], async () => {
+    await database.missions.add(mission);
+    await database.events.put(
+      activityFor(
+        mission,
+        'mission',
+        'execution',
+        `Objective opened: ${mission.code} · ${mission.title}`,
+        mission.objective,
+        now,
+      ),
+    );
+  });
+
+  return mission;
+}
+
+/**
+ * Moves a mission through `MISSION_TRANSITIONS` only, and refuses a `blocked`
+ * move that names no blocker: a blocked objective with no reason is a status
+ * nobody can act on.
+ */
+export async function setMissionStatus(
+  id: string,
+  status: MissionStatus,
+  options: { reason?: string } = {},
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<MissionWriteResult> {
+  return database.transaction('rw', [database.missions, database.events], async () => {
+    const mission = await database.missions.get(id);
+    if (!mission) return { ok: false, reason: 'No objective with that id is in the local store.' };
+    if (mission.status === status) return { ok: false, reason: `Already ${status}.` };
+    if (!canTransitionMission(mission.status, status)) {
+      return {
+        ok: false,
+        reason: `An objective cannot move from ${mission.status} to ${status}.`,
+      };
+    }
+
+    const reason = options.reason?.trim() ?? '';
+    if (missionNeedsReason(status) && reason.length === 0) {
+      return { ok: false, reason: 'A blocked objective needs the blocker written down.' };
+    }
+
+    const stamp = now.toISOString();
+    await database.missions.update(id, {
+      status,
+      blockedReason: status === 'blocked' ? reason : undefined,
+      updatedAt: stamp,
+      touchedAt: stamp,
+    });
+    await database.events.put(
+      activityFor(
+        mission,
+        'mission',
+        'execution',
+        `Objective ${status}: ${mission.code} · ${mission.title}`,
+        status === 'blocked' ? reason : mission.objective,
+        now,
+      ),
+    );
+    return { ok: true };
+  });
+}
+
+/**
+ * Records the progress the operator declares. Mission Control prints it next to
+ * the progress it counts from linked tasks and labels both, because a number
+ * someone typed and a number the store measured are different claims.
+ */
+export async function declareMissionProgress(
+  id: string,
+  percent: number,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<MissionWriteResult> {
+  if (!Number.isFinite(percent)) {
+    return { ok: false, reason: 'Progress must be a number between 0 and 100.' };
+  }
+  const clamped = Math.min(100, Math.max(0, Math.round(percent)));
+
+  return database.transaction('rw', [database.missions, database.events], async () => {
+    const mission = await database.missions.get(id);
+    if (!mission) return { ok: false, reason: 'No objective with that id is in the local store.' };
+
+    const stamp = now.toISOString();
+    await database.missions.update(id, { progress: clamped, updatedAt: stamp, touchedAt: stamp });
+    await database.events.put(
+      activityFor(
+        mission,
+        'mission',
+        'execution',
+        `Objective progress declared at ${String(clamped)}%: ${mission.code}`,
+        'Declared by the operator, not counted from linked work.',
+        now,
+      ),
+    );
+    return { ok: true };
+  });
 }
 
 /** Meeting notes are the operator's account of what happened, so they persist. */

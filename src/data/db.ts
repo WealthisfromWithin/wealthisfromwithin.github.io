@@ -4,6 +4,8 @@ import type {
   AgentMessage,
   AgentSession,
   Approval,
+  AutomationRule,
+  AutomationRun,
   Campaign,
   Company,
   ContentAsset,
@@ -60,6 +62,8 @@ export class SovereignDb extends Dexie {
   researchItems!: EntityTable<ResearchItem, 'id'>;
   agentSessions!: EntityTable<AgentSession, 'id'>;
   agentMessages!: EntityTable<AgentMessage, 'id'>;
+  automations!: EntityTable<AutomationRule, 'id'>;
+  automationRuns!: EntityTable<AutomationRun, 'id'>;
   notifications!: EntityTable<Notification, 'id'>;
   events!: EntityTable<ActivityEvent, 'id'>;
   metrics!: EntityTable<LeverageMetric, 'id'>;
@@ -161,6 +165,27 @@ export class SovereignDb extends Dexie {
       agentSessions: 'id, lastActivityAt, promptId, source',
       agentMessages: 'id, sessionId, at, outcome, source',
     });
+
+    // Wave 6 adds the leverage fabric: local automation rules and the run log
+    // that records what each one did, including the runs that did nothing.
+    // Missions gain a declared success measure, and opportunities and campaigns
+    // gain the objective they serve, so Mission Control can count real value
+    // rather than repeat a stored percentage.
+    this.version(6)
+      .stores({
+        automations: 'id, trigger, action, enabled, source',
+        automationRuns: 'id, ruleId, at, outcome, approvalId, source',
+        opportunities: 'id, stage, nextStepAt, companyId, personId, missionId, source',
+        campaigns: 'id, status, startAt, missionId, source',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table<Partial<Mission>, string>('missions')
+          .toCollection()
+          .modify((row) => {
+            row.successMeasure ??= '';
+          });
+      });
   }
 }
 

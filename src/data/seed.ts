@@ -3,7 +3,7 @@ import { addDays, DAY_MS, HOUR_MS, startOfWeek } from '@/lib/clock';
 import type { SovereignDataset } from './dataset';
 
 /** Seed contents are versioned so a shape change reseeds the local demo rows. */
-export const SEED_VERSION = 'wave5.0';
+export const SEED_VERSION = 'wave6.0';
 
 const DEMO = 'demo' as const;
 
@@ -113,6 +113,8 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       objective: 'Move qualified advisory conversations from 3/week to 8/week without new spend.',
       status: 'active',
       progress: 46,
+      dueAt: at(now, 45 * DAY_MS),
+      successMeasure: 'Eight qualified conversations in one week, twice in a row.',
     },
     {
       ...base,
@@ -123,6 +125,8 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       status: 'blocked',
       progress: 28,
       blockedReason: 'n8n credentials are not configured for the Command Surface.',
+      dueAt: at(now, 20 * DAY_MS),
+      successMeasure: 'One approval, three recorded publishes, no copy retyped.',
     },
     {
       ...base,
@@ -132,6 +136,7 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       objective: 'Every decision recorded with rationale and reversal cost.',
       status: 'paused',
       progress: 8,
+      successMeasure: 'No consequential call in the log without a choice and a reasoning.',
     },
   ];
 
@@ -435,6 +440,31 @@ export function buildDemoDataset(now: Date): SovereignDataset {
     },
     {
       ...base,
+      id: 'apr-automation-content',
+      title: 'Automation wants to raise a signal about content dated today',
+      requestedBy: 'Automation · Content dated today',
+      kind: 'automation',
+      risk: 'warning',
+      status: 'pending',
+      summary:
+        'The rule matched two packages and stopped at this gate. Approving writes one inbox signal; nothing publishes either way.',
+      dueAt: at(now, 1 * DAY_MS),
+      automationRunId: 'run-content-today',
+    },
+    {
+      ...base,
+      id: 'apr-automation-stalled',
+      title: 'Automation raised a stalled opportunity for a decision',
+      requestedBy: 'Automation · Stalled opportunities',
+      kind: 'automation',
+      risk: 'warning',
+      status: 'pending',
+      summary:
+        'Kestrel has not moved in over four weeks. The rule opened this gate and did nothing else.',
+      automationRunId: 'run-stalled-deals',
+    },
+    {
+      ...base,
       id: 'apr-spend',
       title: 'Renew the transcription seat',
       requestedBy: 'Operations loop',
@@ -474,6 +504,7 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       signal: 'Champion asked for pricing rationale unprompted.',
       leadSource: 'Existing client',
       stageChangedAt: at(now, -4 * DAY_MS),
+      missionId: 'msn-042',
     },
     {
       ...base,
@@ -489,6 +520,7 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       signal: 'Opened the pipeline doctrine three times this week.',
       leadSource: 'Referral · TruOak',
       stageChangedAt: at(now, -8 * DAY_MS),
+      missionId: 'msn-042',
     },
     {
       ...base,
@@ -504,6 +536,7 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       signal: 'Chief of staff forwarded the proposal internally.',
       leadSource: 'Inbound · essay',
       stageChangedAt: at(now, -6 * DAY_MS),
+      missionId: 'msn-043',
     },
     {
       ...base,
@@ -534,6 +567,7 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       signal: 'Inbound from the compounding essay two days ago.',
       leadSource: 'Inbound · essay',
       stageChangedAt: at(now, -2 * DAY_MS),
+      missionId: 'msn-042',
     },
     {
       ...base,
@@ -546,6 +580,7 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       signal: 'Closed on the second call. Referral from an essay reader.',
       leadSource: 'Referral',
       stageChangedAt: at(now, -18 * DAY_MS),
+      missionId: 'msn-042',
     },
     {
       ...base,
@@ -571,6 +606,7 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       startAt: at(now, -21 * DAY_MS),
       endAt: at(now, 28 * DAY_MS),
       goal: 'Five published pieces and one qualified conversation traceable to them.',
+      missionId: 'msn-042',
     },
     {
       ...base,
@@ -580,6 +616,7 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       status: 'planning',
       startAt: at(now, 10 * DAY_MS),
       goal: 'A newsletter arc that earns replies, not impressions.',
+      missionId: 'msn-043',
     },
     {
       ...base,
@@ -1949,6 +1986,16 @@ export function buildDemoDataset(now: Date): SovereignDataset {
     },
     {
       ...base,
+      id: 'n-automation-overdue',
+      title: 'Automation: 1 task is past its due date',
+      body: 'Written by the "Overdue work becomes one signal" rule when the operator ran it.',
+      severity: 'warning',
+      read: false,
+      origin: 'Automation',
+      href: '/tasks?status=open',
+    },
+    {
+      ...base,
       id: 'n-kestrel',
       title: 'Kestrel Advisory has been dormant 26 days',
       body: 'Relationship strength dropped below the re-engagement threshold.',
@@ -2064,6 +2111,205 @@ export function buildDemoDataset(now: Date): SovereignDataset {
     },
   ];
 
+  // Local automation rules. Every action here writes to this browser or opens a
+  // gate; the one that would leave the machine is a `handoff`, and it refuses.
+  const automations: SovereignDataset['automations'] = [
+    {
+      ...base,
+      id: 'aut-overdue-tasks',
+      name: 'Overdue work becomes one signal',
+      summary:
+        'Collects every task past its due date into a single inbox signal rather than one per task.',
+      trigger: 'task_overdue',
+      action: 'notify',
+      enabled: true,
+      // A signal to the operator's own inbox reaches nobody else, so the gate
+      // would be ceremony rather than protection.
+      requiresApproval: false,
+      impact: 'warning',
+      notes: 'Runs when the operator asks. Nothing on this surface runs on a timer.',
+      lastRunAt: at(now, -5 * HOUR_MS),
+      runCount: 4,
+    },
+    {
+      ...base,
+      id: 'aut-content-today',
+      name: 'Content dated today',
+      summary:
+        'Raises the packages carrying today as their publish date and still unpublished.',
+      trigger: 'content_due_today',
+      action: 'notify',
+      enabled: true,
+      requiresApproval: true,
+      impact: 'warning',
+      notes:
+        'Gated because a signal about customer-facing copy is the kind of nudge that becomes a habit.',
+      lastRunAt: at(now, -3 * HOUR_MS),
+      runCount: 2,
+    },
+    {
+      ...base,
+      id: 'aut-stalled-deals',
+      name: 'Stalled opportunity needs a decision',
+      summary: 'Opens one gate when a deal has not changed stage in two weeks.',
+      trigger: 'opportunity_stalled',
+      action: 'open_approval',
+      enabled: true,
+      requiresApproval: true,
+      impact: 'warning',
+      notes: 'The gate is the whole action: a human decides what to do with the deal.',
+      lastRunAt: at(now, -26 * HOUR_MS),
+      runCount: 3,
+    },
+    {
+      ...base,
+      id: 'aut-decision-calls',
+      name: 'Overdue calls become a signal',
+      summary: 'Collects decisions past the date the call was due into one signal.',
+      trigger: 'decision_overdue',
+      action: 'notify',
+      enabled: true,
+      requiresApproval: false,
+      impact: 'critical',
+      notes: 'An unmade decision holds up everything downstream of it.',
+      lastRunAt: at(now, -9 * HOUR_MS),
+      runCount: 6,
+    },
+    {
+      ...base,
+      id: 'aut-credential-watch',
+      name: 'Credential gap watch',
+      summary:
+        'Records how many connectors are awaiting credentials, without writing a signal about it.',
+      trigger: 'integration_credential_gap',
+      action: 'log_only',
+      enabled: true,
+      requiresApproval: false,
+      impact: 'info',
+      notes: 'Kept log-only: the Brief already carries this as one aggregate line.',
+      lastRunAt: at(now, -14 * HOUR_MS),
+      runCount: 11,
+    },
+    {
+      ...base,
+      id: 'aut-publish-fanout',
+      name: 'Publish fan-out through n8n',
+      summary:
+        'Would hand approved packages dated today to n8n for publishing on three channels.',
+      trigger: 'content_due_today',
+      action: 'handoff',
+      enabled: true,
+      requiresApproval: true,
+      impact: 'critical',
+      requiresIntegrationId: 'n8n',
+      notes:
+        'Recorded as an intention, not a capability: this bundle has no connector runtime and n8n has no credentials here.',
+      lastRunAt: at(now, -2 * DAY_MS),
+      runCount: 1,
+    },
+    {
+      ...base,
+      id: 'aut-research-due',
+      name: 'Unanswered questions past their date',
+      summary: 'Raises research questions whose date has passed with no answer written.',
+      trigger: 'research_overdue',
+      action: 'notify',
+      enabled: false,
+      requiresApproval: true,
+      impact: 'info',
+      notes: 'Disabled while the research queue is being rebuilt. A disabled rule refuses.',
+      runCount: 0,
+    },
+  ];
+
+  // The run log, including the runs that did nothing. A rule that matched
+  // nothing is recorded as having matched nothing.
+  const automationRuns: SovereignDataset['automationRuns'] = [
+    {
+      ...base,
+      id: 'run-overdue-tasks',
+      ruleId: 'aut-overdue-tasks',
+      at: at(now, -5 * HOUR_MS),
+      outcome: 'applied',
+      matched: 1,
+      matchedIds: ['t-overdue-audit'],
+      detail: '1 overdue task collected into one inbox signal.',
+      notificationId: 'n-automation-overdue',
+      invokedBy: 'Operator',
+    },
+    {
+      ...base,
+      id: 'run-content-today',
+      ruleId: 'aut-content-today',
+      at: at(now, -3 * HOUR_MS),
+      outcome: 'gated',
+      matched: 2,
+      matchedIds: ['c-constraint', 'c-quiet-ops'],
+      detail: '2 packages dated today. Waiting on the gate before a signal is written.',
+      approvalId: 'apr-automation-content',
+      invokedBy: 'Operator',
+    },
+    {
+      ...base,
+      id: 'run-stalled-deals',
+      ruleId: 'aut-stalled-deals',
+      at: at(now, -26 * HOUR_MS),
+      outcome: 'gated',
+      matched: 1,
+      matchedIds: ['opp-kestrel'],
+      detail: '1 stalled opportunity raised for a decision.',
+      approvalId: 'apr-automation-stalled',
+      invokedBy: 'Operator',
+    },
+    {
+      ...base,
+      id: 'run-decision-calls',
+      ruleId: 'aut-decision-calls',
+      at: at(now, -9 * HOUR_MS),
+      outcome: 'applied',
+      matched: 1,
+      matchedIds: ['dec-drop-enrichment'],
+      detail: '1 overdue call collected into one inbox signal.',
+      notificationId: 'n-decision-due',
+      invokedBy: 'Operator',
+    },
+    {
+      ...base,
+      id: 'run-credential-watch',
+      ruleId: 'aut-credential-watch',
+      at: at(now, -14 * HOUR_MS),
+      outcome: 'applied',
+      matched: 20,
+      matchedIds: [],
+      detail: '20 connectors awaiting credentials. Recorded, nothing written.',
+      invokedBy: 'Operator',
+    },
+    {
+      ...base,
+      id: 'run-publish-fanout',
+      ruleId: 'aut-publish-fanout',
+      at: at(now, -2 * DAY_MS),
+      outcome: 'refused',
+      reason: 'awaiting_credentials',
+      matched: 0,
+      matchedIds: [],
+      detail:
+        'n8n is awaiting credentials and this surface has no connector runtime. Nothing was sent.',
+      invokedBy: 'Operator',
+    },
+    {
+      ...base,
+      id: 'run-overdue-tasks-empty',
+      ruleId: 'aut-overdue-tasks',
+      at: at(now, -30 * HOUR_MS),
+      outcome: 'no_match',
+      matched: 0,
+      matchedIds: [],
+      detail: 'Nothing was overdue. The run is recorded anyway.',
+      invokedBy: 'Operator',
+    },
+  ];
+
   const metrics: SovereignDataset['metrics'] = [
     {
       ...base,
@@ -2146,6 +2392,8 @@ export function buildDemoDataset(now: Date): SovereignDataset {
     researchItems,
     agentSessions,
     agentMessages,
+    automations,
+    automationRuns,
     notifications,
     events,
     metrics,

@@ -103,8 +103,17 @@ export const missionSchema = recordBase.extend({
   title: z.string().min(1),
   objective: z.string().default(''),
   status: missionStatusSchema,
+  /**
+   * Declared by the operator, not counted. Mission Control prints it beside the
+   * progress it can count from linked tasks, and says which is which — a number
+   * someone typed and a number the store measured are different claims.
+   */
   progress: z.number().min(0).max(100),
   blockedReason: z.string().optional(),
+  /** The date the objective is meant to be met by, when one was set. */
+  dueAt: isoTimestamp.optional(),
+  /** What "met" means, in the operator's words. Never a computed target. */
+  successMeasure: z.string().default(''),
 });
 export type Mission = z.infer<typeof missionSchema>;
 
@@ -122,6 +131,12 @@ export const approvalSchema = recordBase.extend({
   dueAt: isoTimestamp.optional(),
   decidedAt: isoTimestamp.optional(),
   decidedBy: z.string().optional(),
+  /**
+   * Set when an automation run opened this gate. Deciding it resolves that run:
+   * approving carries out the effect the rule deferred, rejecting records the
+   * refusal. Wave 6's analogue of the content approval sync.
+   */
+  automationRunId: idSchema.optional(),
 });
 export type Approval = z.infer<typeof approvalSchema>;
 
@@ -153,6 +168,8 @@ export const opportunitySchema = recordBase.extend({
   /** How the lead arrived. Distinct from `source`, which is row provenance. */
   leadSource: z.string().default(''),
   stageChangedAt: isoTimestamp.optional(),
+  /** The objective this deal serves, so Mission Control can count real value. */
+  missionId: idSchema.optional(),
 });
 export type Opportunity = z.infer<typeof opportunitySchema>;
 
@@ -303,6 +320,8 @@ export const campaignSchema = recordBase.extend({
   endAt: isoTimestamp.optional(),
   /** What the campaign is for, in the operator's words. Not a target number. */
   goal: z.string().default(''),
+  /** The objective the arc serves. Content rolls up to a mission through this. */
+  missionId: idSchema.optional(),
 });
 export type Campaign = z.infer<typeof campaignSchema>;
 

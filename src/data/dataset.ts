@@ -3,6 +3,8 @@ import type {
   AgentMessage,
   AgentSession,
   Approval,
+  AutomationRule,
+  AutomationRun,
   Campaign,
   Company,
   ContentAsset,
@@ -55,6 +57,8 @@ export interface SovereignDataset {
   researchItems: ResearchItem[];
   agentSessions: AgentSession[];
   agentMessages: AgentMessage[];
+  automations: AutomationRule[];
+  automationRuns: AutomationRun[];
   notifications: Notification[];
   events: ActivityEvent[];
   metrics: LeverageMetric[];
@@ -86,6 +90,8 @@ export const DATASET_KEYS = [
   'researchItems',
   'agentSessions',
   'agentMessages',
+  'automations',
+  'automationRuns',
   'notifications',
   'events',
   'metrics',
@@ -117,6 +123,8 @@ export const emptyDataset: SovereignDataset = {
   researchItems: [],
   agentSessions: [],
   agentMessages: [],
+  automations: [],
+  automationRuns: [],
   notifications: [],
   events: [],
   metrics: [],
