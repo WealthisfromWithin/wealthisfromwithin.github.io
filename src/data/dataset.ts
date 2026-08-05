@@ -135,6 +135,14 @@ export function datasetIsEmpty(dataset: SovereignDataset): boolean {
   return DATASET_KEYS.every((key) => dataset[key].length === 0);
 }
 
+export function countRows(dataset: SovereignDataset): number {
+  let count = 0;
+  for (const key of DATASET_KEYS) {
+    count += dataset[key].length;
+  }
+  return count;
+}
+
 export function countDemoRows(dataset: SovereignDataset): number {
   let count = 0;
   for (const key of DATASET_KEYS) {

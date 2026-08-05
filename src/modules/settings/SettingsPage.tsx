@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useSovereign } from '@/app/context';
-import { plannedModules } from '@/app/modules';
+import { enabledModules, plannedModules } from '@/app/modules';
 import { db } from '@/data/db';
-import { countDemoRows } from '@/data/dataset';
+import { countDemoRows, countRows } from '@/data/dataset';
 import { clearDemoData, resetLocalStore, seedDemoData } from '@/data/repositories';
 import { SEED_VERSION } from '@/data/seed';
 import { useDemoOptOut } from '@/data/useDataset';
 import { agentKernel } from '@/agents';
 import { countByState } from '@/integrations/state';
+import { readSyncEnv, resolveApiBaseUrl, syncStatus } from '@/modules/sync/sync';
 import { Panel, SectionLabel, StatePill } from '@/ui/primitives';
 
 type Busy = 'reseed' | 'clear' | 'reset' | null;
@@ -112,6 +113,74 @@ function StoreControls() {
   );
 }
 
+/**
+ * Which mode this deployment is running in, and what that means for the data.
+ *
+ * "Demo mode" has meant two different things across the waves — badged seed rows
+ * and no backend — and conflating them is how an operator ends up believing
+ * their own records are somewhere else. So this panel separates them: the seed
+ * is a switch the operator controls, and demo-*local* is a property of the
+ * deployment that no switch in this bundle can change.
+ */
+function ModePanel() {
+  const { dataset, ready } = useSovereign();
+  const optedOut = useDemoOptOut();
+  const config = useMemo(() => resolveApiBaseUrl(readSyncEnv()), []);
+  const status = syncStatus(config, null);
+  const demoRows = countDemoRows(dataset);
+  const totalRows = countRows(dataset);
+  const operatorRows = totalRows - demoRows;
+
+  return (
+    <Panel title="Mode" className="lg:col-span-2">
+      <div className="flex flex-wrap items-center gap-3">
+        <StatePill tone={config.kind === 'configured' ? 'gold' : 'muted'}>
+          {config.kind === 'configured' ? 'Local-first · API configured' : 'Demo-local'}
+        </StatePill>
+        <StatePill tone={optedOut ? 'muted' : 'gold'}>
+          {optedOut ? 'Demo seed off' : 'Demo seed on'}
+        </StatePill>
+        <span className="font-mono text-[0.65rem] text-faint tabular-nums">
+          {ready ? `${String(demoRows)} demo · ${String(operatorRows)} yours` : '—'}
+        </span>
+      </div>
+
+      <dl className="mt-3 space-y-2 text-xs leading-5">
+        <div>
+          <dt className="label-caps text-faint">Where records live</dt>
+          <dd className="text-muted">
+            This browser's IndexedDB, and nowhere else. There is no account, no sign-in, and no
+            server copy — clearing site data deletes the operation's records permanently.
+          </dd>
+        </div>
+        <div>
+          <dt className="label-caps text-faint">What the demo seed is</dt>
+          <dd className="text-muted">
+            {optedOut
+              ? 'Off. You removed the seeded rows, and the seeder leaves them removed across reloads. Everything in the store is now yours.'
+              : 'On. Seeded rows carry a Demo badge on every surface that shows them, and every count that includes one says so. They are illustrative, not operational truth.'}
+          </dd>
+        </div>
+        <div>
+          <dt className="label-caps text-faint">What the Command API would change</dt>
+          <dd className="text-muted">
+            {config.kind === 'configured'
+              ? `This build points at ${status.host ?? 'a configured origin'}, but pointing is all it does: no read-model is pulled and no write is sent. The Sync surface can probe its health and record the result, and that is the entire integration.`
+              : 'Nothing here is waiting on a login. Sync, multi-device use, and private connector credentials all need a Command API that does not exist yet, and this deployment is honest about running without one rather than showing a sign-in that leads nowhere.'}
+          </dd>
+        </div>
+      </dl>
+
+      <Link
+        to="/sync"
+        className="label-caps mt-3 inline-block border border-line px-2.5 py-1 text-muted transition-colors hover:border-gold/40 hover:text-ivory"
+      >
+        Open Command API Sync
+      </Link>
+    </Panel>
+  );
+}
+
 function CredentialsPanel() {
   const { dataset } = useSovereign();
   const counts = countByState(dataset.integrations);
@@ -121,7 +190,12 @@ function CredentialsPanel() {
       <p className="text-sm text-muted">
         This surface is a static bundle on GitHub Pages. It holds no secrets and can hold none —
         anything shipped here is public. Credentials belong to the Command API, which does not exist
-        yet.
+        yet. Connected means a recorded probe verified the row, and the only probe this bundle can
+        run is the health check on{' '}
+        <Link to="/sync" className="text-gold hover:text-ivory">
+          Sync
+        </Link>
+        .
       </p>
       <ul className="mt-3 space-y-1.5 text-xs text-faint">
         <li>
@@ -175,6 +249,25 @@ function KernelPanel() {
 function RoadmapPanel() {
   const planned = plannedModules();
 
+  if (planned.length === 0) {
+    return (
+      <Panel title={`Modules · ${String(enabledModules().length)} routed, 0 planned`}>
+        <p className="text-xs leading-5 text-muted">
+          Every module in the registry is built and reachable. The roadmap list is empty because
+          Command API Sync — the last entry — shipped in Wave 7, not because unbuilt work was
+          removed from it: a module cannot appear in navigation before it exists, and it cannot sit
+          in this registry forever without becoming a route.
+        </p>
+        <p className="mt-2 text-xs leading-5 text-faint">
+          What comes next is in{' '}
+          <span className="font-mono">docs/reports/ROADMAP_90_DAY.md</span>, and it is mostly not
+          modules: an API to sync with, a session to sync as, and probes that can verify a
+          connector.
+        </p>
+      </Panel>
+    );
+  }
+
   return (
     <Panel title={`Not built yet · ${String(planned.length)} modules`}>
       <p className="mb-3 text-xs text-muted">
@@ -206,6 +299,7 @@ export function SettingsPage() {
       </header>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <ModePanel />
         <StoreControls />
         <CredentialsPanel />
         <KernelPanel />

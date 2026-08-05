@@ -40,6 +40,7 @@ import {
   PromptsPage,
   ResearchPage,
   SettingsPage,
+  SyncPage,
   TasksPage,
 } from './lazyModules';
 
@@ -72,6 +73,7 @@ const moduleElements: Record<string, RouteObject['element']> = {
   automations: <AutomationsPage />,
   analytics: <AnalyticsPage />,
   integrations: <IntegrationsPage />,
+  sync: <SyncPage />,
   settings: <SettingsPage />,
 };
 

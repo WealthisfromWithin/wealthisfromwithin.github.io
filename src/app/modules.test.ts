@@ -13,8 +13,8 @@ import {
 } from './modules';
 import { routes } from './router';
 
-/** Wave 6 adds the four leverage surfaces; Wave 7 (Sync) stays hidden. */
-const WAVE_6_ENABLED = [
+/** Wave 7 routes the last registered module, so every id in the registry is enabled. */
+const WAVE_7_ENABLED = [
   'ai',
   'analytics',
   'approvals',
@@ -38,6 +38,7 @@ const WAVE_6_ENABLED = [
   'prompts',
   'research',
   'settings',
+  'sync',
   'tasks',
 ];
 
@@ -46,8 +47,8 @@ function servedPaths(): string[] {
 }
 
 describe('module registry', () => {
-  it('enables exactly the Wave 1 through Wave 6 modules', () => {
-    expect(enabledModules().map((module) => module.id).sort()).toEqual(WAVE_6_ENABLED);
+  it('enables exactly the Wave 1 through Wave 7 modules', () => {
+    expect(enabledModules().map((module) => module.id).sort()).toEqual(WAVE_7_ENABLED);
   });
 
   it('splits the enabled modules across Commander and Operator', () => {
@@ -77,6 +78,7 @@ describe('module registry', () => {
       'automations',
       'analytics',
       'integrations',
+      'sync',
       'settings',
     ]);
   });
@@ -90,12 +92,9 @@ describe('module registry', () => {
     }
   });
 
-  it('leaves every Wave 7+ module planned', () => {
+  it('registers nothing beyond Wave 7, so no module can be enabled ahead of its wave', () => {
     for (const module of moduleRegistry) {
-      if (module.wave > 6) expect({ id: module.id, status: module.status }).toEqual({
-        id: module.id,
-        status: 'planned',
-      });
+      expect(module.wave).toBeLessThanOrEqual(7);
     }
   });
 
@@ -110,10 +109,14 @@ describe('module registry', () => {
     }
   });
 
-  it('keeps Command API Sync out of the router until there is an API to sync with', () => {
+  it('routes Command API Sync, and leaves nothing else registered but unbuilt', () => {
     const sync = moduleRegistry.find((module) => module.id === 'sync');
-    expect({ status: sync?.status, wave: sync?.wave }).toEqual({ status: 'planned', wave: 7 });
-    expect(plannedModules().map((module) => module.id)).toEqual(['sync']);
+    expect({ status: sync?.status, wave: sync?.wave }).toEqual({ status: 'enabled', wave: 7 });
+    // The roadmap list is empty because every registered module is served, not
+    // because unbuilt work was quietly deleted from it: the audit forbids a
+    // module appearing in nav before it exists, and it equally forbids a
+    // registry entry that never becomes a route.
+    expect(plannedModules()).toEqual([]);
   });
 
   it('enables every Wave 5 module the cognition wave promised', () => {

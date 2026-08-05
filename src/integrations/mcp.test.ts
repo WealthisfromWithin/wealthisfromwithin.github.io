@@ -62,6 +62,7 @@ describe('mcp servers', () => {
         id: 'probed-mcp',
         name: 'Probed MCP',
         state: 'connected' as const,
+        lastProbedAt: NOW.toISOString(),
       },
     ]);
     expect(rows[0]?.state).toBe('connected');
@@ -71,6 +72,24 @@ describe('mcp servers', () => {
         rank[rows[index - 1]?.state ?? 'connected'],
       );
     }
+  });
+
+  it('reads a connected row with no probe behind it as awaiting credentials', () => {
+    const rows = mcpServers([
+      ...integrations,
+      {
+        ...(integrations.find((integration) => integration.category === 'mcp') as (typeof integrations)[number]),
+        id: 'claims-connected-mcp',
+        name: 'Claims Connected MCP',
+        state: 'connected' as const,
+      },
+    ]);
+    const row = rows.find((entry) => entry.integration.id === 'claims-connected-mcp');
+
+    expect(row?.state).toBe('awaiting_credentials');
+    expect(row?.stateLabel).toBe('Awaiting Credentials');
+    expect(row?.statement).not.toContain('verified probe');
+    expect(rows.every((entry) => entry.state !== 'connected')).toBe(true);
   });
 
   it('shows a declared server with no profile rather than hiding the dependency', () => {
@@ -110,10 +129,20 @@ describe('mcp summary', () => {
   });
 
   it('reports a verified probe only when the registry records one', () => {
-    const connected = integrations.map((integration) =>
+    const claimed = integrations.map((integration) =>
       integration.category === 'mcp' ? { ...integration, state: 'connected' as const } : integration,
     );
-    const summary = mcpSummary(connected);
+    // Every MCP row now claims Connected, and not one carries a probe: the
+    // summary must count zero rather than repeat the claim.
+    expect(mcpSummary(claimed).connected).toBe(0);
+    expect(mcpSummary(claimed).statement).toContain('ships no MCP client');
+
+    const probed = claimed.map((integration) =>
+      integration.category === 'mcp'
+        ? { ...integration, lastProbedAt: NOW.toISOString() }
+        : integration,
+    );
+    const summary = mcpSummary(probed);
     expect(summary.statement).toContain('record a verified probe');
     expect(summary.awaiting).toBe(0);
   });

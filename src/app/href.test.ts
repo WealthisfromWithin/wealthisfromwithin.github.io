@@ -159,10 +159,12 @@ describe('isSafeInternalHref', () => {
     expect(isSafeInternalHref('/\\evil.example')).toBe(false);
   });
 
-  it('rejects planned-module paths', () => {
-    // Wave 7. The route does not exist, so neither does a link to it.
-    expect(isSafeInternalHref('/sync')).toBe(false);
+  it('accepts the Wave 7 sync route now that the module is enabled', () => {
+    expect(isSafeInternalHref('/sync')).toBe(true);
+    // A link is safe only to a path some module actually serves: the MCP panel
+    // lives under `/integrations`, so a top-level `/mcp` is still nowhere.
     expect(isSafeInternalHref('/mcp')).toBe(false);
+    expect(isSafeInternalHref('/sync?state=connected')).toBe(false);
   });
 
   it('rejects malformed strings', () => {
@@ -195,7 +197,7 @@ describe('normalizeInternalHref', () => {
     expect(normalizeInternalHref('javascript:alert(1)', '/inbox')).toBe('/inbox');
     expect(normalizeInternalHref('https://evil.example', '/approvals')).toBe('/approvals');
     expect(normalizeInternalHref('//evil.example', '/')).toBe('/');
-    expect(normalizeInternalHref('/sync', '/inbox')).toBe('/inbox');
+    expect(normalizeInternalHref('/mcp', '/inbox')).toBe('/inbox');
   });
 });
 

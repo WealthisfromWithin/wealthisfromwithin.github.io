@@ -1,5 +1,5 @@
 import type { Integration, IntegrationState } from '@/domain';
-import { integrationStateMeta } from './state';
+import { effectiveIntegrationState, integrationStateMeta } from './state';
 
 /**
  * The MCP surface, read from the integration registry.
@@ -108,18 +108,22 @@ export function mcpServers(integrations: readonly Integration[]): McpServerRow[]
   return integrations
     .filter((integration) => integration.category === 'mcp')
     .map((integration) => {
-      const meta = integrationStateMeta[integration.state];
+      // The registry's own state, after the connected-probe invariant: a row
+      // claiming Connected with no probe behind it reads as awaiting
+      // credentials here exactly as it does on `/integrations`.
+      const state = effectiveIntegrationState(integration);
+      const meta = integrationStateMeta[state];
       const profile = mcpProfileFor(integration.id);
       return {
         integration,
         profile,
-        state: integration.state,
+        state,
         stateLabel: meta.label,
         tone: meta.tone,
         statement:
-          integration.state === 'connected'
+          state === 'connected'
             ? 'The registry records a verified probe for this server.'
-            : integration.state === 'disabled'
+            : state === 'disabled'
               ? 'Turned off deliberately. It is offered in no flow and no rule can name it.'
               : 'Declared and unconfigured. No transport is opened from this bundle, so no tool it would expose is callable.',
       };

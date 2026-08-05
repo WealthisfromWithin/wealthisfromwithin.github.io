@@ -277,6 +277,21 @@ export const moduleRegistry: readonly ModuleDefinition[] = [
     summary: 'Connected, Disabled, or Awaiting Credentials. Nothing else.',
     icon: Plug,
   },
+  // Wave 7. Routed now that it has something honest to be: the adapter states
+  // Connected, Disabled, or Awaiting Credentials for a Command API base URL,
+  // and runs a health probe when one is configured. It claims no read-model and
+  // no write-through, and the page says so rather than implying otherwise
+  // (ARCHITECTURE_AUDIT §5.3, §5.7).
+  {
+    id: 'sync',
+    path: '/sync',
+    label: 'Command API Sync',
+    group: 'operator',
+    status: 'enabled',
+    wave: 7,
+    summary: 'The Command API adapter, its state, and the one probe it can run.',
+    icon: Database,
+  },
   {
     id: 'settings',
     path: '/settings',
@@ -287,11 +302,6 @@ export const moduleRegistry: readonly ModuleDefinition[] = [
     summary: 'Surface preferences, local store control, roadmap.',
     icon: Settings,
   },
-
-  // Wave 7. It stays out of the nav and out of the router until there is a
-  // remote read-model to sync with: a route that syncs nothing is the fake
-  // inventory the audit exists to prevent (ARCHITECTURE_AUDIT §5.3).
-  { id: 'sync', path: '/sync', label: 'Command API Sync', group: 'operator', status: 'planned', wave: 7, summary: 'Remote read-model and write-through.', icon: Database },
 ] as const;
 
 /**

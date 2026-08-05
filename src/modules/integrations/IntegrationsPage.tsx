@@ -6,6 +6,7 @@ import {
   categoryFilterLabel,
   countByState,
   deriveSubstrateHealth,
+  effectiveIntegrationState,
   INTEGRATION_CATEGORY_FILTERS,
   INTEGRATION_STATES,
   integrationCategoryLabel,
@@ -33,7 +34,7 @@ function parseCategory(value: string | null): IntegrationCategoryFilter {
 }
 
 function IntegrationRow({ integration }: { integration: Integration }) {
-  const meta = integrationStateMeta[integration.state];
+  const meta = integrationStateMeta[effectiveIntegrationState(integration)];
 
   return (
     <tr className="border-b border-line/60 align-top last:border-b-0">
@@ -82,11 +83,15 @@ export function IntegrationsPage() {
   const rows = useMemo(
     () =>
       [...dataset.integrations]
-        .filter((integration) => filter === 'all' || integration.state === filter)
+        .filter(
+          (integration) => filter === 'all' || effectiveIntegrationState(integration) === filter,
+        )
         .filter((integration) => category === 'all' || integration.category === category)
         .sort((a, b) => {
-          if (a.state !== b.state) {
-            return INTEGRATION_STATES.indexOf(a.state) - INTEGRATION_STATES.indexOf(b.state);
+          const left = effectiveIntegrationState(a);
+          const right = effectiveIntegrationState(b);
+          if (left !== right) {
+            return INTEGRATION_STATES.indexOf(left) - INTEGRATION_STATES.indexOf(right);
           }
           return a.name.localeCompare(b.name);
         }),
@@ -111,8 +116,14 @@ export function IntegrationsPage() {
         <SectionLabel>Registry</SectionLabel>
         <h1 className="mt-1 font-display text-2xl text-ivory">Integrations</h1>
         <p className="mt-1 max-w-3xl text-sm text-muted">
-          Every connector is exactly one of Connected, Disabled, or Awaiting Credentials. Nothing is
-          marked Connected without a verified health probe, and no probe exists yet on this surface.
+          Every connector is exactly one of Connected, Disabled, or Awaiting Credentials. Connected
+          requires the timestamp of the probe that verified it: a row claiming it without one is
+          read as Awaiting Credentials here and everywhere else. The only probe this bundle can run
+          is the Command API health check on{' '}
+          <Link to="/sync" className="text-gold hover:text-ivory">
+            Sync
+          </Link>
+          .
         </p>
 
         <dl className="mt-4 flex flex-wrap items-baseline gap-x-8 gap-y-2 border-y border-line py-3">

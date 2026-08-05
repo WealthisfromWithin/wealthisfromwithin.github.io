@@ -7,6 +7,11 @@ import { buildHealthReport, probeStatus, verifiedIntegrations } from './health';
 const now = new Date('2026-08-05T07:30:00.000Z');
 const stamp = now.toISOString();
 
+/**
+ * A connected row carries the probe that verified it by default, because that
+ * is the only way a row can be connected (`src/integrations/state.ts`). Tests
+ * about the invariant itself override `lastProbedAt` explicitly.
+ */
 function integration(
   id: string,
   state: IntegrationState,
@@ -23,6 +28,7 @@ function integration(
     capabilities: [],
     rationale: '',
     substrate: false,
+    ...(state === 'connected' ? { lastProbedAt: stamp } : {}),
     ...extra,
   };
 }
@@ -118,6 +124,16 @@ describe('health honesty', () => {
     expect(report.events.every((event) => dataset.events.includes(event))).toBe(true);
     const timestamps = report.events.map((event) => Date.parse(event.at));
     expect([...timestamps].sort((a, b) => b - a)).toEqual(timestamps);
+  });
+
+  it('will not report a connected row as verified without the probe that verified it', () => {
+    const claimed = integration('a', 'connected', { lastProbedAt: undefined, substrate: true });
+    const report = buildHealthReport(datasetOf([claimed, integration('b', 'connected')]));
+
+    expect(verifiedIntegrations([claimed])).toHaveLength(0);
+    expect(report.counts).toEqual({ connected: 1, disabled: 0, awaiting_credentials: 1 });
+    expect(report.substrate.status).toBe('offline');
+    expect(report.probe.hasRun).toBe(true);
   });
 
   it('says so plainly when the store holds no integrations at all', () => {

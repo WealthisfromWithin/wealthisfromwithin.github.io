@@ -123,6 +123,9 @@ export const ResearchPage = lazy(() =>
 export const SettingsPage = lazy(() =>
   import('@/modules/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })),
 );
+export const SyncPage = lazy(() =>
+  import('@/modules/sync/SyncPage').then((m) => ({ default: m.SyncPage })),
+);
 export const TasksPage = lazy(() =>
   import('@/modules/tasks/TasksPage').then((m) => ({ default: m.TasksPage })),
 );

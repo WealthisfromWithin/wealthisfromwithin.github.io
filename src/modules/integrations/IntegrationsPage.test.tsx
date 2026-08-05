@@ -34,8 +34,32 @@ describe('IntegrationsPage', () => {
     await waitFor(() => {
       expect(rowCount()).toBeGreaterThan(10);
     });
-    expect(screen.getByText(/no probe exists yet on this surface/)).toBeDefined();
+    expect(screen.getByText(/Connected\s+requires the timestamp of the probe/)).toBeDefined();
     expect(screen.queryByText(/^Connected$/, { selector: 'span' })).toBeNull();
+  });
+
+  it('reads a connected row with no probe behind it as awaiting credentials', async () => {
+    // No writer in the surface can produce this row; a bad migration or a
+    // future sync adapter could, and the registry must not repeat the claim.
+    await db.integrations.update('contentdone', { state: 'connected' });
+    renderRegistry('/integrations?state=connected');
+
+    expect(
+      await screen.findByText('No connector matches connected in every category.'),
+    ).toBeDefined();
+    expect(rowCount()).toBe(0);
+  });
+
+  it('shows a probed connected row as Connected', async () => {
+    await db.integrations.update('contentdone', {
+      state: 'connected',
+      lastProbedAt: '2026-07-04T10:00:00.000Z',
+    });
+    renderRegistry('/integrations?state=connected');
+
+    expect(await screen.findByText('ContentDone API')).toBeDefined();
+    expect(rowCount()).toBe(1);
+    expect(screen.getByText('probed 2026-07-04')).toBeDefined();
   });
 
   it('filters by category from the URL and keeps the state filter alongside it', async () => {

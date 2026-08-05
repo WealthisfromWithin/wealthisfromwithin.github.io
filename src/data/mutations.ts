@@ -29,6 +29,7 @@ import {
   type ContentStatus,
   type Decision,
   type DecisionStatus,
+  type IntegrationState,
   type KnowledgeKind,
   type KnowledgeNode,
   type MemoryConfidence,
@@ -2565,6 +2566,87 @@ export async function declareMissionProgress(
       ),
     );
     return { ok: true };
+  });
+}
+
+/* ── Wave 7: the only writer that can set an integration Connected ──────── */
+
+export interface IntegrationProbeResult {
+  /** True only when the probe reached the endpoint and it reported itself healthy. */
+  verified: boolean;
+  /** When the probe ran. A result without one is refused. */
+  at: string;
+  /** What happened, in the words the surface will print. */
+  detail: string;
+}
+
+export interface ProbeWriteResult {
+  ok: boolean;
+  reason?: string;
+  /** The state the row now carries. Never `connected` without `lastProbedAt`. */
+  state?: IntegrationState;
+}
+
+/**
+ * Records a health probe against a registry row.
+ *
+ * This is the whole of the connected-probe invariant on the write side
+ * (`docs/reviews/WAVE_6_GPT_REVIEW.md` L1). Every other writer in this module
+ * leaves `state` alone; this one may move it, and it can only move it while
+ * holding the timestamp of the probe that justifies the move. A verified result
+ * with no usable `at` is refused outright rather than downgraded, because a
+ * probe that cannot say when it ran is not evidence of anything.
+ *
+ * A failed probe is written too. "We asked at 09:14 and it did not answer" is
+ * worth more than silence, and it leaves the row Awaiting Credentials with the
+ * date visible on `/integrations` and the Health Monitor.
+ */
+export async function recordIntegrationProbe(
+  integrationId: string,
+  result: IntegrationProbeResult,
+  database: SovereignDb = db,
+  now: Date = new Date(),
+): Promise<ProbeWriteResult> {
+  const at = result.at.trim();
+  if (at.length === 0 || Number.isNaN(Date.parse(at))) {
+    return {
+      ok: false,
+      reason:
+        'A probe result must carry the time it ran. Connected without a probe timestamp is refused.',
+    };
+  }
+
+  return database.transaction('rw', [database.integrations, database.events], async () => {
+    const integration = await database.integrations.get(integrationId);
+    if (!integration) {
+      return { ok: false, reason: 'No integration with that id is in the local registry.' };
+    }
+    if (integration.state === 'disabled') {
+      return {
+        ok: false,
+        reason: `${integration.name} is disabled deliberately. Turn it on in the registry before probing it.`,
+      };
+    }
+
+    const state: IntegrationState = result.verified ? 'connected' : 'awaiting_credentials';
+    const stamp = now.toISOString();
+    await database.integrations.update(integrationId, {
+      state,
+      lastProbedAt: at,
+      updatedAt: stamp,
+      touchedAt: stamp,
+    });
+    await database.events.put(
+      activityFor(
+        integration,
+        'probe',
+        'system',
+        `Health probe ${result.verified ? 'verified' : 'failed'}: ${integration.name}`,
+        result.detail,
+        now,
+      ),
+    );
+    return { ok: true, state };
   });
 }
 

@@ -75,8 +75,7 @@ describe('router', () => {
   );
 
   it('sends an unrouted path back to the brief rather than a coming-soon page', async () => {
-    // `/sync` is the Wave 7 module: planned, so the router serves nothing for it.
-    renderAt('/sync');
+    renderAt('/nothing-here');
 
     expect(
       within(await page()).getByRole('heading', { level: 1, name: 'Morning Brief' }),

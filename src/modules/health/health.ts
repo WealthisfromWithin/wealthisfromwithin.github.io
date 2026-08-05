@@ -3,6 +3,8 @@ import type { ActivityEvent, Integration, IntegrationCategory } from '@/domain';
 import {
   countByState,
   deriveSubstrateHealth,
+  effectiveIntegrationState,
+  isUsable,
   type IntegrationStateCounts,
   type SubstrateHealth,
 } from '@/integrations/state';
@@ -47,8 +49,14 @@ export interface HealthReport {
 
 const EVENT_LIMIT = 12;
 
+/**
+ * Verified means the registry row is connected *and* carries the probe that
+ * verified it, which is what `isUsable` enforces — a Health Monitor that
+ * repeated an unverified claim would be the fake green this module exists to
+ * prevent.
+ */
 export function verifiedIntegrations(integrations: readonly Integration[]): Integration[] {
-  return integrations.filter((integration) => integration.state === 'connected');
+  return integrations.filter(isUsable);
 }
 
 function lastProbe(integrations: readonly Integration[]): string | undefined {
@@ -94,7 +102,7 @@ function categoryHealth(integrations: readonly Integration[]): CategoryHealth[] 
 
 function blockedCapabilities(integrations: readonly Integration[]): BlockedCapability[] {
   return integrations
-    .filter((integration) => integration.state === 'awaiting_credentials')
+    .filter((integration) => effectiveIntegrationState(integration) === 'awaiting_credentials')
     .flatMap((integration) =>
       integration.capabilities.map((capability) => ({
         integrationId: integration.id,
