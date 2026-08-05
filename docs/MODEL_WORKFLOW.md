@@ -67,6 +67,7 @@ A wave does **not** start until G3 for the previous wave is green (or explicitly
 
 | Wave | Status | Owner |
 |------|--------|-------|
-| Wave 0 — Architecture lock | **IN PROGRESS / awaiting acceptance** | Grok 4.5 |
-| Wave 1 — Foundation shell | Blocked on G0 | Claude |
-| Wave 2+ | Queued | Per `ARCHITECTURE_AUDIT.md` §7 |
+| Wave 0 — Architecture lock | Accepted | Grok 4.5 |
+| Wave 1 — Foundation shell | **G1 complete — awaiting G2 review** (`docs/waves/WAVE_1.md`) | Claude |
+| Wave 2 — Attention OS | Blocked on Wave 1 G3 | Claude |
+| Wave 3+ | Queued | Per `ARCHITECTURE_AUDIT.md` §7 |
