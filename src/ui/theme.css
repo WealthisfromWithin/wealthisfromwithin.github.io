@@ -1,0 +1,95 @@
+@import 'tailwindcss';
+
+@import '@fontsource/libre-caslon-text/400.css';
+@import '@fontsource/libre-caslon-text/700.css';
+@import '@fontsource/dm-sans/400.css';
+@import '@fontsource/dm-sans/500.css';
+@import '@fontsource/dm-sans/700.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+
+/*
+  Sovereign brand tokens. Values are locked by ARCHITECTURE_AUDIT.md §1.2 —
+  change them only with an architecture delta.
+*/
+@theme {
+  --color-obsidian: #16130b;
+  --color-surface: rgb(35 31 23);
+  --color-surface-high: rgb(46 42 33);
+  --color-surface-highest: rgb(57 52 43);
+
+  /* Sovereign gold: rgb(201 162 39) === #c9a227 */
+  --color-gold: rgb(201 162 39);
+  --color-gold-dim: rgb(201 162 39 / 0.45);
+  --color-gold-faint: rgb(201 162 39 / 0.14);
+
+  --color-ivory: rgb(245 241 232);
+  --color-on-surface: rgb(234 225 212);
+  --color-muted: rgb(234 225 212 / 0.62);
+  --color-faint: rgb(234 225 212 / 0.38);
+
+  --color-sentinel: #2a9d8f;
+  --color-alert: rgb(230 57 70);
+
+  --color-line: rgb(201 162 39 / 0.16);
+  --color-line-strong: rgb(201 162 39 / 0.32);
+
+  --font-display: 'Libre Caslon Text', Georgia, 'Times New Roman', serif;
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius-panel: 4px;
+
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 1rem;
+}
+
+@layer base {
+  html {
+    background-color: var(--color-obsidian);
+    color: var(--color-on-surface);
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+  }
+
+  ::selection {
+    background: var(--color-gold-faint);
+    color: var(--color-ivory);
+  }
+
+  :focus-visible {
+    outline: 1px solid var(--color-gold);
+    outline-offset: 2px;
+  }
+
+  /* Quiet scrollbars: the surface should read as instrumentation, not chrome. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-surface-highest) transparent;
+  }
+}
+
+@layer components {
+  .glass {
+    background: rgb(35 31 23 / 0.6);
+    backdrop-filter: blur(12px);
+  }
+}
+
+@utility label-caps {
+  font-size: var(--text-micro);
+  line-height: var(--text-micro--line-height);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+@utility rule-b {
+  border-bottom: 1px solid var(--color-line);
+}

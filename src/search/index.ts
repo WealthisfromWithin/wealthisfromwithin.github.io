@@ -1,0 +1,160 @@
+import type { SovereignDataset } from '@/data/dataset';
+import { formatCurrencyCents } from '@/lib/format';
+import { rankByFuzzy, type RankedResult } from './fuzzy';
+
+export type SearchKind =
+  | 'person'
+  | 'company'
+  | 'task'
+  | 'mission'
+  | 'opportunity'
+  | 'content'
+  | 'integration'
+  | 'notification';
+
+export interface SearchDocument {
+  id: string;
+  kind: SearchKind;
+  title: string;
+  subtitle: string;
+  keywords: string[];
+  route: string;
+  demo: boolean;
+}
+
+export const searchKindLabel: Record<SearchKind, string> = {
+  person: 'Person',
+  company: 'Company',
+  task: 'Task',
+  mission: 'Mission',
+  opportunity: 'Opportunity',
+  content: 'Content',
+  integration: 'Integration',
+  notification: 'Signal',
+};
+
+/**
+ * Flattens the local store into one searchable surface. Routes point only at
+ * modules that exist; records whose module is not built yet resolve to the
+ * brief rather than a dead link.
+ */
+export function buildSearchIndex(dataset: SovereignDataset): SearchDocument[] {
+  const companies = new Map(dataset.companies.map((company) => [company.id, company.name]));
+  const documents: SearchDocument[] = [];
+
+  for (const person of dataset.people) {
+    documents.push({
+      id: `person:${person.id}`,
+      kind: 'person',
+      title: person.name,
+      subtitle: [person.role, person.companyId ? companies.get(person.companyId) : undefined]
+        .filter(Boolean)
+        .join(' · '),
+      keywords: [...person.tags, person.email ?? ''],
+      route: '/',
+      demo: person.source === 'demo',
+    });
+  }
+
+  for (const company of dataset.companies) {
+    documents.push({
+      id: `company:${company.id}`,
+      kind: 'company',
+      title: company.name,
+      subtitle: company.segment,
+      keywords: [company.domain ?? ''],
+      route: '/',
+      demo: company.source === 'demo',
+    });
+  }
+
+  for (const task of dataset.tasks) {
+    documents.push({
+      id: `task:${task.id}`,
+      kind: 'task',
+      title: task.title,
+      subtitle: `${task.status.replace('_', ' ')} · ${task.priority}`,
+      keywords: [task.context, task.blockedReason ?? ''],
+      route: '/',
+      demo: task.source === 'demo',
+    });
+  }
+
+  for (const mission of dataset.missions) {
+    documents.push({
+      id: `mission:${mission.id}`,
+      kind: 'mission',
+      title: `${mission.code} · ${mission.title}`,
+      subtitle: mission.status,
+      keywords: [mission.objective],
+      route: '/',
+      demo: mission.source === 'demo',
+    });
+  }
+
+  for (const opportunity of dataset.opportunities) {
+    documents.push({
+      id: `opportunity:${opportunity.id}`,
+      kind: 'opportunity',
+      title: opportunity.name,
+      subtitle: `${opportunity.stage} · ${formatCurrencyCents(opportunity.valueCents)}`,
+      keywords: [opportunity.nextStep, opportunity.signal],
+      route: '/',
+      demo: opportunity.source === 'demo',
+    });
+  }
+
+  for (const item of dataset.contentItems) {
+    documents.push({
+      id: `content:${item.id}`,
+      kind: 'content',
+      title: item.title,
+      subtitle: `${item.status} · ${item.channel}`,
+      keywords: [item.blockedReason ?? ''],
+      route: '/',
+      demo: item.source === 'demo',
+    });
+  }
+
+  for (const integration of dataset.integrations) {
+    documents.push({
+      id: `integration:${integration.id}`,
+      kind: 'integration',
+      title: integration.name,
+      subtitle: integration.state.replace('_', ' '),
+      keywords: [...integration.capabilities, integration.category],
+      route: '/integrations',
+      demo: integration.source === 'demo',
+    });
+  }
+
+  for (const notification of dataset.notifications) {
+    documents.push({
+      id: `notification:${notification.id}`,
+      kind: 'notification',
+      title: notification.title,
+      subtitle: notification.origin,
+      keywords: [notification.body],
+      route: notification.href ?? '/',
+      demo: notification.source === 'demo',
+    });
+  }
+
+  return documents;
+}
+
+export function searchDocuments(
+  query: string,
+  documents: readonly SearchDocument[],
+  limit = 12,
+): RankedResult<SearchDocument>[] {
+  if (query.trim().length === 0) return [];
+  return rankByFuzzy(
+    query,
+    documents,
+    (document) => [document.title, document.subtitle, document.keywords.join(' ')],
+    { limit, minScore: 0 },
+  );
+}
+
+export * from './fuzzy';
