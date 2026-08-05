@@ -59,7 +59,7 @@ source. The ceiling is honest, not modest.
 | Production readiness score | 12 / 100 | 34 / 100 | 42 / 100 | 50 / 100 |
 | Enabled modules | 0 | 3 | 6 | 12 |
 | Record detail routes | 0 | 0 | 0 | 3 |
-| Tests | 0 | 46 | 114 | 265 |
+| Tests | 0 | 46 | 114 | 281 |
 
 Wave 3 readiness gains: six operable revenue and relationship surfaces backed by
 tested joins (+5), a brief that reads the same selectors its modules render so

@@ -61,8 +61,8 @@ Revenue and relationship motion is operable: CRM, Pipeline, Tasks, Projects,
 Calendar, and Meetings, plus three record detail routes. Gains are in *working
 application* (twelve enabled modules), *data integrity* (every displayed figure
 is arithmetic over a stored field, and five new mutations all stamp `touchedAt`),
-*quality gates* (265 tests across 25 files, including component clicks against a
-real IndexedDB), and one point of *auth & security* for extending the href
+*quality gates* (281 tests across 26 files, including component clicks and real
+router mounts against a real IndexedDB), and one point of *auth & security* for extending the href
 allowlist to dynamic record ids.
 
 Caps are unchanged: no auth, no remote persistence, no health probes, no agent

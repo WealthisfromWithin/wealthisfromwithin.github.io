@@ -238,7 +238,7 @@ schema validation, which belongs to the Wave 7 performance pass.
 |---------|--------|
 | `pnpm lint` | 0 errors, 0 warnings |
 | `pnpm typecheck` | clean |
-| `pnpm test` | **265 tests, 25 files, passing** (Wave 2 + fix pack: 114 / 15) |
+| `pnpm test` | **281 tests, 26 files, passing** (Wave 2 + fix pack: 114 / 15) |
 | `pnpm build` | success — 540.44 kB first load + 13 lazy chunks, one chunk-size advisory (TD-16) |
 
 New coverage: six selector suites (CRM temperature and joins, pipeline stage
@@ -249,6 +249,11 @@ reflection after each mutation, registry and record-route parity, href safety fo
 dynamic ids, palette href parity, and component tests that click through
 `/tasks`, `/pipeline`, `/meetings`, and both CRM detail pages against a real
 IndexedDB.
+
+`src/app/router.test.tsx` mounts the real router at every enabled path and every
+record route and waits for the Suspense fallback to clear, so a broken lazy
+import fails the suite rather than the browser. That replaces the headless-Chrome
+deep-link check Wave 2 ran by hand.
 
 ## Deferrals (intentional)
 
