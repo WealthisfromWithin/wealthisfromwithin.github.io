@@ -85,7 +85,19 @@ async function writeMeta(database: SovereignDb, key: string, value: string): Pro
   await database.meta.put({ key, value });
 }
 
+const DEMO_OPT_OUT = 'true';
+
+/**
+ * True when the operator removed demo rows. The flag outlives the session, so
+ * `ensureSeeded` must not undo the choice on the next mount.
+ */
+export async function isDemoOptedOut(database: SovereignDb = db): Promise<boolean> {
+  return (await readMeta(database, META_KEYS.demoOptOut)) === DEMO_OPT_OUT;
+}
+
 export async function needsSeed(database: SovereignDb, now: Date): Promise<boolean> {
+  if (await isDemoOptedOut(database)) return false;
+
   const version = await readMeta(database, META_KEYS.seedVersion);
   if (version !== SEED_VERSION) return true;
 
@@ -105,7 +117,8 @@ function transactionTables(database: SovereignDb): Table[] {
 
 /**
  * Replaces seeder-owned rows with a fresh dataset. Rows the operator created are
- * left alone: only `demo` rows and ids this seeder owns are cleared.
+ * left alone: only `demo` rows and ids this seeder owns are cleared. Calling this
+ * is an explicit request for demo data, so it also revokes any demo opt-out.
  */
 export async function seedDemoData(database: SovereignDb, now: Date): Promise<void> {
   const dataset = buildDemoDataset(now);
@@ -126,6 +139,7 @@ export async function seedDemoData(database: SovereignDb, now: Date): Promise<vo
     }
     await writeMeta(database, META_KEYS.seedVersion, SEED_VERSION);
     await writeMeta(database, META_KEYS.seededAt, now.toISOString());
+    await database.meta.delete(META_KEYS.demoOptOut);
   });
 }
 
@@ -138,6 +152,10 @@ export async function ensureSeeded(
   }
 }
 
+/**
+ * Removes every demo row and records the opt-out, so reloads and `ensureSeeded`
+ * leave the store demo-free until "Refresh demo data" or "Reset store".
+ */
 export async function clearDemoData(database: SovereignDb = db): Promise<void> {
   await database.transaction('rw', transactionTables(database), async () => {
     for (const name of DATASET_TABLES) {
@@ -151,9 +169,11 @@ export async function clearDemoData(database: SovereignDb = db): Promise<void> {
     }
     await database.meta.delete(META_KEYS.seedVersion);
     await database.meta.delete(META_KEYS.seededAt);
+    await writeMeta(database, META_KEYS.demoOptOut, DEMO_OPT_OUT);
   });
 }
 
+/** Drops the whole database, opt-out included: the store returns to first-run state. */
 export async function resetLocalStore(database: SovereignDb = db): Promise<void> {
   await database.delete();
   await database.open();

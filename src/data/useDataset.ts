@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { emptyDataset, type SovereignDataset } from './dataset';
-import { ensureSeeded, readDataset } from './repositories';
+import { ensureSeeded, isDemoOptedOut, readDataset } from './repositories';
 
 export interface DatasetState {
   dataset: SovereignDataset;
@@ -9,7 +9,15 @@ export interface DatasetState {
   error: string | null;
 }
 
-/** Live view of the local store. Seeds demo rows on first open or when stale. */
+/** Live view of the operator's durable demo opt-out. */
+export function useDemoOptOut(): boolean {
+  return useLiveQuery(() => isDemoOptedOut(), [], false);
+}
+
+/**
+ * Live view of the local store. Seeds demo rows on first open or when stale,
+ * unless the operator opted out of demo data.
+ */
 export function useDatasetSource(): DatasetState {
   const [seeded, setSeeded] = useState(false);
   const [error, setError] = useState<string | null>(null);

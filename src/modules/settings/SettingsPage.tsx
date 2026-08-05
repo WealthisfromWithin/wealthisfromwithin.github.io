@@ -6,6 +6,7 @@ import { db } from '@/data/db';
 import { countDemoRows } from '@/data/dataset';
 import { clearDemoData, resetLocalStore, seedDemoData } from '@/data/repositories';
 import { SEED_VERSION } from '@/data/seed';
+import { useDemoOptOut } from '@/data/useDataset';
 import { agentKernel } from '@/agents/kernel';
 import { countByState } from '@/integrations/state';
 import { Panel, SectionLabel, StatePill } from '@/ui/primitives';
@@ -14,6 +15,7 @@ type Busy = 'reseed' | 'clear' | 'reset' | null;
 
 function StoreControls() {
   const { dataset, ready } = useSovereign();
+  const optedOut = useDemoOptOut();
   const [busy, setBusy] = useState<Busy>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -49,7 +51,17 @@ function StoreControls() {
             {ready ? demoRows : '—'}
           </dd>
         </div>
+        <div>
+          <dt className="label-caps text-faint">Demo seed</dt>
+          <dd className="font-mono text-xs text-muted">{optedOut ? 'Off (opted out)' : 'On'}</dd>
+        </div>
       </dl>
+
+      <p className="mb-3 text-xs text-muted">
+        {optedOut
+          ? 'Demo rows are removed and stay removed across reloads. Refresh demo data or reset the store to bring them back.'
+          : 'Removing demo rows is durable: the seeder will not restore them on reload until you refresh demo data or reset the store.'}
+      </p>
 
       <div className="flex flex-wrap gap-2">
         <button
@@ -66,7 +78,11 @@ function StoreControls() {
           type="button"
           disabled={busy !== null}
           onClick={() => {
-            void run('clear', () => clearDemoData(db), 'Demo rows removed.');
+            void run(
+              'clear',
+              () => clearDemoData(db),
+              'Demo rows removed. They stay removed across reloads.',
+            );
           }}
           className="label-caps border border-line px-2.5 py-1 text-muted transition-colors hover:border-gold/40 hover:text-ivory disabled:opacity-40"
         >

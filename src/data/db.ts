@@ -56,5 +56,6 @@ export const db = new SovereignDb();
 export const META_KEYS = {
   seedVersion: 'seed.version',
   seededAt: 'seed.at',
-  demoMode: 'settings.demoMode',
+  /** Operator preference: demo rows stay removed until an explicit refresh or reset. */
+  demoOptOut: 'seed.optOut',
 } as const;
