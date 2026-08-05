@@ -96,6 +96,14 @@ export interface ProviderHealth {
 export interface ProviderDescriptor {
   id: ProviderId;
   label: string;
+  /**
+   * True when completing leaves this machine. The kernel treats it as the whole
+   * truth about an adapter — `allowExternalCalls` is checked against nothing
+   * else — so an adapter may only declare `false` if it has proven every
+   * request it can make stays on the loopback interface, whatever its
+   * configuration says. See `createLocalProvider`, which refuses a
+   * non-loopback endpoint rather than lowering the claim to `true`.
+   */
   external: boolean;
 }
 

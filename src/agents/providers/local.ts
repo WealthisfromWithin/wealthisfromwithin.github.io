@@ -9,10 +9,21 @@ import type { AgentRequest, AgentResult, LLMProvider, ProviderHealth } from '../
  * credential. With no endpoint configured it refuses with `no_provider` and
  * says which variable would configure it. It never returns text it did not
  * receive from the endpoint.
+ *
+ * That "loopback URL" is a claim the adapter has to earn. It reports
+ * `external: false`, which is what tells the kernel a turn may run under
+ * `allowExternalCalls: false`; if a build-time variable could aim the same
+ * adapter at any host, the policy would be decided by an environment file
+ * rather than by the kernel. So the endpoint is parsed and checked against the
+ * loopback hosts **before** any request is built, and a non-loopback URL is
+ * refused rather than probed: nothing is sent to it, not even a health probe.
  */
 
 export interface LocalProviderConfig {
-  /** Base URL of the local runtime, e.g. `http://localhost:11434`. */
+  /**
+   * Base URL of the local runtime, e.g. `http://localhost:11434`. Only
+   * loopback hosts are accepted; anything else is refused without a request.
+   */
   endpoint?: string;
   model?: string;
   /** Injected in tests. Defaults to the ambient `fetch` when one exists. */
@@ -29,8 +40,66 @@ const chatResponseSchema = z.object({
   message: z.object({ content: z.string() }),
 });
 
-function trimEndpoint(endpoint: string): string {
-  return endpoint.replace(/\/+$/, '');
+/**
+ * The hosts a request cannot leave the machine to reach. `URL` normalises what
+ * it is given — case, an IPv6 address written out in full, a trailing dot — so
+ * these are compared against `hostname` after parsing rather than against the
+ * raw string. LAN and private addresses are deliberately absent: they are other
+ * machines, and an adapter that reached them while reporting `external: false`
+ * would be making the same claim this check exists to stop.
+ */
+const LOOPBACK_HOSTS: readonly string[] = ['localhost', '127.0.0.1', '[::1]'];
+
+const NOT_CONFIGURED =
+  'No local model endpoint is configured. Set VITE_LOCAL_AI_URL to a runtime on this machine.';
+
+const NO_FETCH = 'This runtime has no fetch implementation, so the local endpoint cannot be reached.';
+
+/** Either a base URL proven to be on this machine, or the reason it was refused. */
+export type LocalEndpointCheck =
+  | { readonly ok: true; readonly base: string }
+  | { readonly ok: false; readonly detail: string };
+
+/**
+ * Parses the configured endpoint and accepts it only if it is a loopback HTTP
+ * address. The returned base is rebuilt from the parsed URL — origin and path,
+ * no query or fragment — so the paths this adapter appends are appended to
+ * something it has already understood.
+ */
+export function resolveLocalEndpoint(raw: string | undefined): LocalEndpointCheck {
+  const endpoint = raw?.trim();
+  if (endpoint === undefined || endpoint.length === 0) {
+    return { ok: false, detail: NOT_CONFIGURED };
+  }
+
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return {
+      ok: false,
+      detail:
+        'VITE_LOCAL_AI_URL is not a URL this adapter can parse, so there is no local runtime to call. Set it to something like http://localhost:11434.',
+    };
+  }
+
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    return {
+      ok: false,
+      detail: `VITE_LOCAL_AI_URL uses the ${url.protocol.replace(/:$/, '')} scheme, which this adapter does not call. Set it to an http:// address on this machine, such as http://localhost:11434.`,
+    };
+  }
+
+  // The host is reported back, never the whole URL: a misconfigured value can
+  // carry credentials in its userinfo, and this string is printed in the UI.
+  if (!LOOPBACK_HOSTS.includes(url.hostname)) {
+    return {
+      ok: false,
+      detail: `VITE_LOCAL_AI_URL points at ${url.host}, which is not this machine. The local adapter only calls loopback hosts (${LOOPBACK_HOSTS.join(', ')}), so nothing was sent there — not even a probe — and no local runtime is available.`,
+    };
+  }
+
+  return { ok: true, base: `${url.origin}${url.pathname}`.replace(/\/+$/, '') };
 }
 
 function unavailable(detail: string): ProviderHealth {
@@ -45,17 +114,13 @@ function unavailable(detail: string): ProviderHealth {
 }
 
 export function createLocalProvider(config: LocalProviderConfig = {}): LLMProvider {
-  const endpoint = config.endpoint?.trim();
+  const resolved = resolveLocalEndpoint(config.endpoint);
   const model = config.model ?? DEFAULT_MODEL;
   const fetchImpl = config.fetchImpl ?? (typeof fetch === 'function' ? fetch : undefined);
   const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
-  const missing =
-    endpoint === undefined || endpoint.length === 0
-      ? 'No local model endpoint is configured. Set VITE_LOCAL_AI_URL to a runtime on this machine.'
-      : fetchImpl === undefined
-        ? 'This runtime has no fetch implementation, so the local endpoint cannot be reached.'
-        : null;
+  const endpoint = resolved.ok ? resolved.base : undefined;
+  const missing = !resolved.ok ? resolved.detail : fetchImpl === undefined ? NO_FETCH : null;
 
   return {
     id: 'local',
@@ -67,7 +132,7 @@ export function createLocalProvider(config: LocalProviderConfig = {}): LLMProvid
         return unavailable(missing ?? 'Not configured.');
       }
       try {
-        const response = await fetchImpl(`${trimEndpoint(endpoint)}/api/tags`, {
+        const response = await fetchImpl(`${endpoint}/api/tags`, {
           method: 'GET',
           signal: AbortSignal.timeout(timeoutMs),
         });
@@ -114,7 +179,7 @@ export function createLocalProvider(config: LocalProviderConfig = {}): LLMProvid
 
       let payload: unknown;
       try {
-        const response = await fetchImpl(`${trimEndpoint(endpoint)}/api/chat`, {
+        const response = await fetchImpl(`${endpoint}/api/chat`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ model, stream: false, messages: request.messages }),
