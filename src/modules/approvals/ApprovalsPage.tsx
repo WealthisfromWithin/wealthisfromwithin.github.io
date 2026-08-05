@@ -198,8 +198,8 @@ export function ApprovalsPage() {
         setBlocked(result.compliance?.blocking === true && !result.ok ? approval.id : null);
         setMessage(
           result.ok
-            ? `${approvalStatusLabel[status]}: ${approval.title}. Recorded in the local store${
-                result.compliance ? `. ${result.compliance.summary}` : ''
+            ? `${approvalStatusLabel[status]}: ${approval.title}. Recorded in the local store.${
+                result.compliance ? ` ${result.compliance.summary}` : ''
               }`
             : (result.reason ?? 'Nothing changed.'),
         );
