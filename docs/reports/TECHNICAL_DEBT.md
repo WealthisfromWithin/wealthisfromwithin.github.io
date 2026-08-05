@@ -40,6 +40,9 @@ Debt is dominated by **absence of an application**, not by messy application cod
 | TD-26 | Compliance policy is hard-coded and unversioned against what it checked | Low | Wave 6 |
 | TD-27 | Content readings are assumed cumulative with nothing enforcing it | Low | Wave 5 |
 | TD-28 | Hub sub-routes have no distinct sidebar state | Low | Wave 6 |
+| TD-29 | Memory review dates decay on one fixed interval for every kind | Low | Wave 6 |
+| TD-30 | Agent session history is sent whole, with no length bound | Low | Wave 6 |
+| TD-31 | Knowledge backlinks are computed by scanning every node | Low | Wave 7 |
 
 ## Interest (cost of waiting)
 
@@ -93,3 +96,20 @@ Every day the poster stays live trains the operator to distrust Substrate health
 | TD-10 | **Unchanged.** No probes. LinkedIn, Facebook, and the n8n publishing webhook stay `awaiting_credentials`, and the Content OS says so wherever a publish would otherwise be implied. |
 | TD-24 | **Larger.** The href allowlist now reads the content filter constants too, so more selector code lands in the shared chunk. Same Wave 7 fix. |
 | TD-25 | **Held.** `setContentStatus` can write `blocked`, but no surface collects a reason, so blocked packages still arrive only from the seed. |
+
+## Wave 5 paydown (`docs/waves/WAVE_5.md`)
+
+| ID | Status after Wave 5 |
+|----|---------------------|
+| TD-06 | **Partly paid.** Hosted providers are no longer stubbed in the vague sense: four adapters live under `src/agents/providers/**` behind one interface, each reporting `awaiting_credentials` with the integration row that would fix it and refusing every call. The file holding them has no code path that produces text. Closes when the Command API can hold a key and sign a request (Wave 7). |
+| TD-15 | **Partly paid.** There is a runtime: a kernel that orders adapters, applies the WITHIN policy, owns the approval flag, and returns the most explanatory refusal — plus a local adapter that genuinely runs against an operator-supplied endpoint. Named agents with roles and objectives remain Wave 6. |
+| TD-16 | **Held, larger.** Ten new page chunks keep 78.9 KB out of the first load, but the seed and eight new zod schemas took it to 645.71 KB raw / 199.57 KB gzip across 32 deferred chunks. Vendor chunking (Wave 7) is still the only thing that moves the advisory. |
+| TD-17 | **Held.** All 23 cognition writers stamp `touchedAt`; a recorded decision, a saved memory, or a captured node survives the 12-hour reseed. |
+| TD-19 | **Held.** 23 new writers in the same module, adopting the `{ ok, reason }` result shape Wave 4 introduced. |
+| TD-20 | **Larger.** An eighth channel, `cognition`, appends to the same unbounded activity log. Retention remains Wave 7. |
+| TD-03 | **Held.** Everything counted is a count: recalls, prompt uses, findings, unanswered turns. Memory confidence is a provenance word — stated, observed, inferred — rather than a percentage, precisely so nothing on these surfaces reads as modelled. |
+| TD-21 | **Held, and more visible.** `decidedBy` defaults to the same hard-coded `Operator` as every other actor field. A decision log is the first surface where the actor genuinely matters. |
+| TD-23 | **Held.** `knowledgeHref`, `documentHref`, and `decisionHref` validate id shape, not existence; a link to a cleared record lands on "Not in the local store". |
+| TD-24 | **Larger.** The href allowlist now reads filter constants from six more selector modules, pulling more selector code into the shared chunk. Same Wave 7 fix. |
+| TD-27 | **Unpaid.** Nominally due this wave; nothing in Wave 5 touched content readings. Moves with the metric entry form. |
+| TD-10 | **Unchanged.** No probes. The local adapter's `/api/tags` check is an adapter-level probe of the operator's own machine, not a Health Monitor probe, and Health still projects registry state. |
