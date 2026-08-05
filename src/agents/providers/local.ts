@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { acceptLoopbackEndpoint, LOOPBACK_HOSTS } from '@/lib/endpoints';
 import type { AgentRequest, AgentResult, LLMProvider, ProviderHealth } from '../kernel';
 
 /**
@@ -40,16 +41,6 @@ const chatResponseSchema = z.object({
   message: z.object({ content: z.string() }),
 });
 
-/**
- * The hosts a request cannot leave the machine to reach. `URL` normalises what
- * it is given — case, an IPv6 address written out in full, a trailing dot — so
- * these are compared against `hostname` after parsing rather than against the
- * raw string. LAN and private addresses are deliberately absent: they are other
- * machines, and an adapter that reached them while reporting `external: false`
- * would be making the same claim this check exists to stop.
- */
-const LOOPBACK_HOSTS: readonly string[] = ['localhost', '127.0.0.1', '[::1]'];
-
 const NOT_CONFIGURED =
   'No local model endpoint is configured. Set VITE_LOCAL_AI_URL to a runtime on this machine.';
 
@@ -61,45 +52,40 @@ export type LocalEndpointCheck =
   | { readonly ok: false; readonly detail: string };
 
 /**
- * Parses the configured endpoint and accepts it only if it is a loopback HTTP
- * address. The returned base is rebuilt from the parsed URL — origin and path,
- * no query or fragment — so the paths this adapter appends are appended to
+ * Turns the configured endpoint into this adapter's vocabulary. Whether the
+ * value is acceptable is decided by `acceptLoopbackEndpoint`, which the Content
+ * Security Policy builder also asks, so an endpoint this adapter refuses can
+ * never appear in `connect-src` (`docs/reviews/WAVE_7_GPT_REVIEW.md` H2). The
+ * returned base is rebuilt from the parsed URL — origin and path, no query,
+ * fragment, or userinfo — so the paths this adapter appends are appended to
  * something it has already understood.
  */
 export function resolveLocalEndpoint(raw: string | undefined): LocalEndpointCheck {
-  const endpoint = raw?.trim();
-  if (endpoint === undefined || endpoint.length === 0) {
-    return { ok: false, detail: NOT_CONFIGURED };
-  }
+  const check = acceptLoopbackEndpoint(raw);
+  if (check.ok) return { ok: true, base: check.base };
 
-  let url: URL;
-  try {
-    url = new URL(endpoint);
-  } catch {
-    return {
-      ok: false,
-      detail:
-        'VITE_LOCAL_AI_URL is not a URL this adapter can parse, so there is no local runtime to call. Set it to something like http://localhost:11434.',
-    };
+  switch (check.reason) {
+    case 'missing':
+      return { ok: false, detail: NOT_CONFIGURED };
+    case 'unparsable':
+      return {
+        ok: false,
+        detail:
+          'VITE_LOCAL_AI_URL is not a URL this adapter can parse, so there is no local runtime to call. Set it to something like http://localhost:11434.',
+      };
+    case 'scheme':
+      return {
+        ok: false,
+        detail: `VITE_LOCAL_AI_URL uses the ${(check.protocol ?? '').replace(/:$/, '')} scheme, which this adapter does not call. Set it to an http:// address on this machine, such as http://localhost:11434.`,
+      };
+    default:
+      // The host is reported back, never the whole URL: a misconfigured value can
+      // carry credentials in its userinfo, and this string is printed in the UI.
+      return {
+        ok: false,
+        detail: `VITE_LOCAL_AI_URL points at ${check.host ?? 'another machine'}, which is not this machine. The local adapter only calls loopback hosts (${LOOPBACK_HOSTS.join(', ')}), so nothing was sent there — not even a probe — and no local runtime is available.`,
+      };
   }
-
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    return {
-      ok: false,
-      detail: `VITE_LOCAL_AI_URL uses the ${url.protocol.replace(/:$/, '')} scheme, which this adapter does not call. Set it to an http:// address on this machine, such as http://localhost:11434.`,
-    };
-  }
-
-  // The host is reported back, never the whole URL: a misconfigured value can
-  // carry credentials in its userinfo, and this string is printed in the UI.
-  if (!LOOPBACK_HOSTS.includes(url.hostname)) {
-    return {
-      ok: false,
-      detail: `VITE_LOCAL_AI_URL points at ${url.host}, which is not this machine. The local adapter only calls loopback hosts (${LOOPBACK_HOSTS.join(', ')}), so nothing was sent there — not even a probe — and no local runtime is available.`,
-    };
-  }
-
-  return { ok: true, base: `${url.origin}${url.pathname}`.replace(/\/+$/, '') };
 }
 
 function unavailable(detail: string): ProviderHealth {

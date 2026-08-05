@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildContentSecurityPolicy, connectSourcesFromEnv, originOf } from './csp';
+import { resolveLocalEndpoint } from '@/agents/providers/local';
+import { resolveApiBaseUrl } from '@/modules/sync/sync';
+import { buildContentSecurityPolicy, connectSourcesFromEnv } from './csp';
 
 function directives(policy: string): Map<string, string> {
   return new Map(
@@ -58,21 +60,6 @@ describe('buildContentSecurityPolicy', () => {
   });
 });
 
-describe('originOf', () => {
-  it('keeps the origin and drops everything else', () => {
-    expect(originOf('https://api.example.com/v1/health?k=1')).toBe('https://api.example.com');
-    expect(originOf('http://localhost:11434')).toBe('http://localhost:11434');
-  });
-
-  it('returns nothing for a value that is not an http(s) URL', () => {
-    expect(originOf(undefined)).toBeUndefined();
-    expect(originOf('')).toBeUndefined();
-    expect(originOf('not a url')).toBeUndefined();
-    expect(originOf('javascript:alert(1)')).toBeUndefined();
-    expect(originOf('file:///etc/passwd')).toBeUndefined();
-  });
-});
-
 describe('connectSourcesFromEnv', () => {
   it('is empty for the public build, which talks to nothing', () => {
     expect(connectSourcesFromEnv({})).toEqual([]);
@@ -87,7 +74,77 @@ describe('connectSourcesFromEnv', () => {
     ).toEqual(['https://api.example.com', 'http://localhost:11434']);
   });
 
-  it('drops a value the adapters would refuse anyway', () => {
-    expect(connectSourcesFromEnv({ VITE_API_BASE_URL: 'nonsense' })).toEqual([]);
+  it('names only the origin, never the path the adapter would call', () => {
+    expect(connectSourcesFromEnv({ VITE_API_BASE_URL: 'https://api.example.com/v1/command' })).toEqual([
+      'https://api.example.com',
+    ]);
+  });
+
+  it('allows the loopback exception both adapters make', () => {
+    expect(connectSourcesFromEnv({ VITE_API_BASE_URL: 'http://127.0.0.1:8787' })).toEqual([
+      'http://127.0.0.1:8787',
+    ]);
+  });
+});
+
+/**
+ * The H2 invariant (`docs/reviews/WAVE_7_GPT_REVIEW.md`): a `connect-src` entry
+ * for an origin the adapter refuses is an exfiltration destination granted for
+ * nothing. These tests assert the two sides agree by construction — every
+ * refused value is checked against the adapter that refuses it *and* against
+ * the policy, in the same case.
+ */
+describe('connect-src cannot outrun the adapters', () => {
+  const refusedApiUrls: [string, string][] = [
+    ['unparsable', 'nonsense'],
+    ['not a fetchable scheme', 'javascript:alert(1)'],
+    ['a file URL', 'file:///etc/passwd'],
+    ['plaintext http on a remote host', 'http://api.example.com'],
+    ['credentials in the userinfo', 'https://user:pw@api.example.com'],
+    ['an api key in the query string', 'https://api.example.com?api_key=abc'],
+    ['a fragment', 'https://api.example.com#token=abc'],
+    ['a non-loopback host that only looks local', 'http://localhost.example.com'],
+  ];
+
+  it.each(refusedApiUrls)('adds no connect source for a Command API URL with %s', (_label, value) => {
+    expect(resolveApiBaseUrl(value).kind).toBe('refused');
+    expect(connectSourcesFromEnv({ VITE_API_BASE_URL: value })).toEqual([]);
+    expect(directives(buildContentSecurityPolicy({ connectSources: [] })).get('connect-src')).toBe(
+      "'self'",
+    );
+  });
+
+  const refusedLocalUrls: [string, string][] = [
+    ['unparsable', 'nonsense'],
+    ['a scheme the adapter does not call', 'ws://localhost:11434'],
+    ['a hosted model endpoint', 'https://models.example.com'],
+    ['a LAN address, which is another machine', 'http://192.168.1.10:11434'],
+    ['a host that merely contains localhost', 'http://localhost.attacker.test'],
+  ];
+
+  it.each(refusedLocalUrls)('adds no connect source for a local AI URL with %s', (_label, value) => {
+    expect(resolveLocalEndpoint(value).ok).toBe(false);
+    expect(connectSourcesFromEnv({ VITE_LOCAL_AI_URL: value })).toEqual([]);
+  });
+
+  it('keeps the accepted half of a half-refused build', () => {
+    expect(
+      connectSourcesFromEnv({
+        VITE_API_BASE_URL: 'https://api.example.com',
+        VITE_LOCAL_AI_URL: 'https://models.example.com',
+      }),
+    ).toEqual(['https://api.example.com']);
+  });
+
+  it('never carries a secret from a refused URL into the policy', () => {
+    const policy = buildContentSecurityPolicy({
+      connectSources: connectSourcesFromEnv({
+        VITE_API_BASE_URL: 'https://user:sk-secret@api.example.com?api_key=abc',
+      }),
+    });
+
+    expect(policy).not.toContain('sk-secret');
+    expect(policy).not.toContain('api_key');
+    expect(directives(policy).get('connect-src')).toBe("'self'");
   });
 });

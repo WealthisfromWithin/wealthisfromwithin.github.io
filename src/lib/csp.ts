@@ -11,9 +11,12 @@
  *   partial, and `docs/OPERATIONS.md` says so rather than implying the meta tag
  *   covers it.
  * - **The policy is fixed at build time.** Connect sources are derived from the
- *   same `VITE_*` variables the adapters read, so a build that configures a
- *   Command API can reach it and a build that does not cannot — the policy and
- *   the code agree because they read the same input.
+ *   same `VITE_*` variables the adapters read *and run through the same
+ *   acceptance rules* (`src/lib/endpoints.ts`), so a build that configures a
+ *   Command API can reach it and a build that configures something an adapter
+ *   would refuse gets no connect source at all. The policy and the code agree
+ *   because they ask the same function, not because two copies of the same
+ *   check happen to match.
  *
  * `style-src` keeps `'unsafe-inline'` for one reason: `index.html` carries an
  * inline `<style>` that paints the obsidian background before the stylesheet
@@ -21,6 +24,11 @@
  * next edits that block, and inline *style* is a materially smaller risk than
  * inline script, which is not allowed at all.
  */
+
+// Extension included deliberately: `vite.config.ts` imports this module to
+// write the policy at build time, and Vite's native config loader requires
+// every import beneath a config file to name its file.
+import { acceptApiBaseUrl, acceptLoopbackEndpoint, type EndpointCheck } from './endpoints.ts';
 
 export interface CspOptions {
   /**
@@ -71,29 +79,33 @@ export function buildContentSecurityPolicy(options: CspOptions = {}): string {
 }
 
 /**
- * The origin of a URL, or nothing when it is not a URL worth allowing. Only the
- * origin is returned: a policy naming a path would be a policy that looks
- * narrower than it is, since CSP matches path prefixes loosely.
+ * The origin an accepted endpoint may be reached at, or nothing when the
+ * adapter refused it. Only the origin is used: a policy naming a path would be
+ * a policy that looks narrower than it is, since CSP matches path prefixes
+ * loosely.
  */
-export function originOf(raw: string | undefined): string | undefined {
-  const value = raw?.trim();
-  if (value === undefined || value.length === 0) return undefined;
-  try {
-    const url = new URL(value);
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') return undefined;
-    return url.origin;
-  } catch {
-    return undefined;
-  }
+function allowedOrigin(check: EndpointCheck): string | undefined {
+  return check.ok ? check.origin : undefined;
 }
 
 /**
- * The connect sources a build actually needs, read from the variables the
- * adapters read: the Command API base URL and the local model endpoint. A build
- * with neither gets `'self'` alone, which is what the public deployment ships.
+ * The connect sources a build actually needs, decided by the same acceptance
+ * rules the adapters apply to the same variables: the Command API base URL and
+ * the local model endpoint.
+ *
+ * This is the whole of the agreement between policy and code
+ * (`docs/reviews/WAVE_7_GPT_REVIEW.md` H2). A value an adapter would refuse —
+ * plaintext remote `http:`, userinfo, a query string hiding a key, a local-AI
+ * URL pointing off this machine — produces no connect source, so a
+ * misconfigured build cannot hand a compromised dependency a destination the
+ * app itself would never call. A build with neither variable gets `'self'`
+ * alone, which is what the public deployment ships.
  */
 export function connectSourcesFromEnv(env: Record<string, string | undefined>): string[] {
-  return unique([originOf(env.VITE_API_BASE_URL), originOf(env.VITE_LOCAL_AI_URL)].filter(
-    (value): value is string => value !== undefined,
-  ));
+  return unique(
+    [
+      allowedOrigin(acceptApiBaseUrl(env.VITE_API_BASE_URL)),
+      allowedOrigin(acceptLoopbackEndpoint(env.VITE_LOCAL_AI_URL)),
+    ].filter((value): value is string => value !== undefined),
+  );
 }

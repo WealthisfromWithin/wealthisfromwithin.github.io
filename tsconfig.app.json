@@ -17,7 +17,10 @@
     "noUnusedParameters": true,
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
-    "allowImportingTsExtensions": false,
+    // Only `src/lib/csp.ts` uses one, and only because `vite.config.ts` loads
+    // that module directly: Vite's native config loader requires every import
+    // beneath a config file to carry its extension.
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "noEmit": true,
 

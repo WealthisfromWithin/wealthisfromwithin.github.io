@@ -25,6 +25,8 @@
  *    code path that claims one did.
  */
 
+import { acceptApiBaseUrl } from '@/lib/endpoints';
+
 export interface SyncEnv {
   /** Origin of the Command API, e.g. `https://api.example.com`. Public by definition. */
   VITE_API_BASE_URL?: string;
@@ -54,69 +56,52 @@ export type SyncConfig =
 const ABSENT =
   'No Command API is configured for this build. VITE_API_BASE_URL is unset, so this surface makes no network request at all and every record you see came from this browser.';
 
-const LOOPBACK_HOSTS: readonly string[] = ['localhost', '127.0.0.1', '[::1]'];
-
 /**
- * Parses `VITE_API_BASE_URL` and accepts it only if it is a base URL that can be
- * published. The four refusals are each a way a base URL can carry a secret or
- * downgrade the connection:
- *
- * - **Unparsable** — nothing to call.
- * - **Not `https:`** — a plaintext API on a public origin leaks whatever it
- *   answers. Loopback `http:` is allowed, because that is the operator's own
- *   machine and the same exception the local model adapter makes.
- * - **Userinfo** — `https://user:token@host` is a credential in the bundle.
- * - **Query or fragment** — `?api_key=…` is the other way a credential arrives,
- *   and a base URL has no legitimate need for either.
+ * Turns `VITE_API_BASE_URL` into the adapter's own vocabulary. Whether the value
+ * is acceptable is decided by `acceptApiBaseUrl`, which the Content Security
+ * Policy builder also asks, so a URL this adapter refuses can never appear in
+ * `connect-src` (`docs/reviews/WAVE_7_GPT_REVIEW.md` H2). Only the wording of
+ * each refusal belongs here.
  */
 export function resolveApiBaseUrl(raw: string | undefined): SyncConfig {
-  const value = raw?.trim();
-  if (value === undefined || value.length === 0) {
-    return { kind: 'absent', detail: ABSENT };
-  }
+  const check = acceptApiBaseUrl(raw);
 
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
+  if (check.ok) {
     return {
-      kind: 'refused',
-      detail:
-        'VITE_API_BASE_URL is not a URL this adapter can parse, so there is nothing to probe. Set it to an origin such as https://api.example.com.',
+      kind: 'configured',
+      base: check.base,
+      host: check.host,
+      detail: `A Command API base URL is configured for ${check.host}. Nothing is requested from it until you run the health probe, and a probe only proves the origin answered.`,
     };
   }
 
-  if (url.username.length > 0 || url.password.length > 0) {
-    return {
-      kind: 'refused',
-      detail:
-        'VITE_API_BASE_URL carries credentials in the URL. A VITE_ variable is inlined into a public bundle, so that credential would be published. It was refused and nothing was sent to it.',
-    };
+  switch (check.reason) {
+    case 'missing':
+      return { kind: 'absent', detail: ABSENT };
+    case 'unparsable':
+      return {
+        kind: 'refused',
+        detail:
+          'VITE_API_BASE_URL is not a URL this adapter can parse, so there is nothing to probe. Set it to an origin such as https://api.example.com.',
+      };
+    case 'userinfo':
+      return {
+        kind: 'refused',
+        detail:
+          'VITE_API_BASE_URL carries credentials in the URL. A VITE_ variable is inlined into a public bundle, so that credential would be published. It was refused and nothing was sent to it.',
+      };
+    case 'query_or_fragment':
+      return {
+        kind: 'refused',
+        detail:
+          'VITE_API_BASE_URL carries a query string or fragment. A base URL needs neither, and both are common places for an API key to hide, so it was refused and nothing was sent to it.',
+      };
+    default:
+      return {
+        kind: 'refused',
+        detail: `VITE_API_BASE_URL uses ${(check.protocol ?? '').replace(/:$/, '')} for ${check.host ?? 'that host'}. Only https is called, except on this machine's loopback address, so nothing was sent to it.`,
+      };
   }
-
-  if (url.search.length > 0 || url.hash.length > 0) {
-    return {
-      kind: 'refused',
-      detail:
-        'VITE_API_BASE_URL carries a query string or fragment. A base URL needs neither, and both are common places for an API key to hide, so it was refused and nothing was sent to it.',
-    };
-  }
-
-  const loopback = LOOPBACK_HOSTS.includes(url.hostname);
-  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) {
-    return {
-      kind: 'refused',
-      detail: `VITE_API_BASE_URL uses ${url.protocol.replace(/:$/, '')} for ${url.host}. Only https is called, except on this machine's loopback address, so nothing was sent to it.`,
-    };
-  }
-
-  const base = `${url.origin}${url.pathname}`.replace(/\/+$/, '');
-  return {
-    kind: 'configured',
-    base,
-    host: url.host,
-    detail: `A Command API base URL is configured for ${url.host}. Nothing is requested from it until you run the health probe, and a probe only proves the origin answered.`,
-  };
 }
 
 /* ── Probe ──────────────────────────────────────────────────────────────── */
