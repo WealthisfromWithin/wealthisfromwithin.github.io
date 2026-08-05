@@ -4,7 +4,7 @@
 **Plan:** `docs/IMPLEMENTATION_PLAN_WAVE_6.md`
 **Architecture:** `ARCHITECTURE_AUDIT.md` §7 Wave 6
 **Predecessor:** `docs/waves/WAVE_5.md` (G3 PASS after the H1 fix pack)
-**Status:** complete — awaiting review
+**Status:** complete — G3 PASS after the M1 fix pack
 
 ---
 
@@ -283,7 +283,7 @@ and only the Wave 7 vendor-chunking pass moves it.
 |---------|--------|
 | `pnpm lint` | 0 errors, 0 warnings |
 | `pnpm typecheck` | clean |
-| `pnpm test` | **856 tests, 64 files, passing** (Wave 5: 644 / 49) |
+| `pnpm test` | **857 tests, 64 files, passing** (Wave 5: 644 / 49) — 856 / 64 before the fix pack |
 | `pnpm build` | success — 692.18 kB first load + 40 lazy chunks, one chunk-size advisory (TD-16) |
 
 212 tests were added, 202 of them in 15 new files:
@@ -303,7 +303,7 @@ and only the Wave 7 vendor-chunking pass moves it.
   created at version 5 opens at 6 with its mission intact, `successMeasure`
   backfilled, and the two leverage tables present and empty.
 - Selector suites — `automations` (18), `missions` (16), `analytics` (20),
-  `metrics` (24), `mcp` (12): filters and grouping, run ordering, gate lookup,
+  `metrics` (24, then 25 after the fix pack), `mcp` (12): filters and grouping, run ordering, gate lookup,
   rollups that count links without double-counting, window arithmetic, medians
   over means, KPI bases and sample sizes, and the MCP state ordering.
 - Page suites — Automations (8), the rule detail (7), Missions with the objective
@@ -406,3 +406,38 @@ untouched and still green:** `src/data/mutations.test.ts`,
 8. **Analytics and Metrics are two modules, not one.** Product instrumentation
    and business KPIs answer different questions, carry different caveats, and are
    read by the operator in different moods. Each links to the other.
+
+## Fix pack — content KPIs now honour the Metrics window (G3 M1)
+
+`docs/reviews/WAVE_6_GPT_REVIEW.md` M1 held the wave on one bug: the Metrics
+page reads "A window filters recorded dates," but `contentGroup()` in
+`src/modules/metrics/metrics.ts` summed **every** `dataset.contentMetrics` row
+into engagement rate and recorded conversions regardless of the window the
+operator had selected. `/metrics?window=30d` and `/metrics?window=all` printed
+the identical figure, because a reading captured a year ago counted the same as
+one captured yesterday. Publishing counts (`published`, `cadence`) already
+filtered by `publishedAt`; the two performance KPIs were the only ones in the
+group reading the whole table.
+
+The fix filters `contentMetrics` by `capturedAt` through the same `inWindow`
+helper every other group already uses, before summing impressions,
+engagements, or conversions:
+
+```268:272:src/modules/metrics/metrics.ts
+  const metricsInWindow = dataset.contentMetrics.filter((row) => inWindow(row.capturedAt, start, now));
+  const impressions = metricsInWindow.reduce((total, row) => total + row.impressions, 0);
+  const engagements = metricsInWindow.reduce((total, row) => total + row.engagements, 0);
+  const conversions = metricsInWindow.reduce((total, row) => total + row.conversions, 0);
+```
+
+`sample`, `basis`, and `demo` on both KPIs now read from `metricsInWindow`
+rather than the unfiltered table, so a card that says "captured in this
+window" is describing the rows it actually summed, and the demo badge does not
+fire on a stale row a narrower window has already excluded.
+
+One regression covers it in `src/modules/metrics/metrics.test.ts`: a dataset
+built from one reading five days old and one reading four hundred days old
+asserts that a `30d` window counts only the in-window row in both `sample` and
+`value` for engagement rate and conversions, and that the `all` window counts
+both. The existing "no readings" test still holds, because an empty table is
+still empty after the window filter.
