@@ -3,14 +3,23 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SovereignDb } from './db';
 import { countDemoRows } from './dataset';
 import {
+  approveContentItem,
+  captureContentIdea,
   createTask,
   decideApproval,
   markAllNotificationsRead,
+  promoteContentIdea,
+  recordContentPublished,
   saveMeetingNotes,
+  scheduleContentItem,
+  scoreContentIdea,
+  setContentStatus,
+  setIdeaStatus,
   setNotificationRead,
   setOpportunityStage,
   setTaskPriority,
   setTaskStatus,
+  submitContentForReview,
 } from './mutations';
 import {
   clearDemoData,
@@ -22,6 +31,7 @@ import {
 import { buildMorningBrief } from '@/modules/dashboard/brief';
 import { approvalCounts, selectApprovals } from '@/modules/approvals/queue';
 import { selectOpportunities } from '@/modules/pipeline/pipeline';
+import { contentDueToday, selectIdeas } from '@/modules/content/content';
 import { selectTasks, taskCounts } from '@/modules/tasks/tasks';
 import { projectProgress } from '@/modules/projects/projects';
 import { DAY_MS } from '@/lib/clock';
@@ -30,6 +40,11 @@ const PENDING_GATE = 'apr-outreach';
 const OPEN_TASK = 't-brief-truoak';
 const OPPORTUNITY = 'opp-truoak';
 const PAST_MEETING = 'mtg-kestrel-checkin';
+const DRAFT_ITEM = 'c-substrate';
+const REVIEW_ITEM = 'c-constraint';
+const APPROVED_ITEM = 'c-renewal-proof';
+const SCHEDULED_ITEM = 'c-advisory-loop';
+const VAULT_IDEA = 'idea-leverage-inventory';
 
 let dbName = '';
 let database: SovereignDb;
@@ -430,6 +445,281 @@ describe('meeting notes', () => {
   });
 });
 
+describe('content status machine (W4)', () => {
+  it('moves a draft back to the vault and stamps the write', async () => {
+    const result = await setContentStatus(DRAFT_ITEM, 'idea', {}, database);
+    expect(result.ok).toBe(true);
+
+    const item = await database.contentItems.get(DRAFT_ITEM);
+    expect(item?.status).toBe('idea');
+    expect(item?.touchedAt).toBeDefined();
+  });
+
+  it('refuses a move the machine does not allow, and says which one', async () => {
+    const result = await setContentStatus(DRAFT_ITEM, 'archived', {}, database);
+    expect(result.ok).toBe(true);
+
+    const backwards = await setContentStatus(DRAFT_ITEM, 'in_review', {}, database);
+    expect(backwards.ok).toBe(false);
+    expect(backwards.reason).toContain('cannot move straight to');
+  });
+
+  it('sends the three guarded moves to the writer that can make them', async () => {
+    expect((await setContentStatus(REVIEW_ITEM, 'approved', {}, database)).reason).toContain(
+      'approveContentItem',
+    );
+    expect((await setContentStatus(APPROVED_ITEM, 'scheduled', {}, database)).reason).toContain(
+      'scheduleContentItem',
+    );
+    expect((await setContentStatus(SCHEDULED_ITEM, 'published', {}, database)).reason).toContain(
+      'recordContentPublished',
+    );
+  });
+
+  it('records a block with its reason and clears it on the way out', async () => {
+    await setContentStatus(DRAFT_ITEM, 'blocked', { blockedReason: 'Legal is reading it.' }, database);
+    expect((await database.contentItems.get(DRAFT_ITEM))?.blockedReason).toBe(
+      'Legal is reading it.',
+    );
+
+    await setContentStatus(DRAFT_ITEM, 'drafting', {}, database);
+    expect((await database.contentItems.get(DRAFT_ITEM))?.blockedReason).toBeUndefined();
+  });
+
+  it('reports no change for an unknown id or the status it is already in', async () => {
+    expect((await setContentStatus('c-nobody', 'idea', {}, database)).reason).toContain('No content');
+    expect((await setContentStatus(DRAFT_ITEM, 'drafting', {}, database)).reason).toContain(
+      'Already',
+    );
+  });
+
+  it('writes a content event carrying the status it left', async () => {
+    await setContentStatus(DRAFT_ITEM, 'idea', {}, database);
+    const event = (await readDataset(database)).events.find((row) =>
+      row.id.startsWith(`e-content-${DRAFT_ITEM}`),
+    );
+    expect(event?.title).toContain('Content returned to the vault');
+    expect(event?.detail).toContain('drafting');
+    expect(event?.channel).toBe('content');
+  });
+});
+
+describe('content review gate (W4)', () => {
+  it('opens an Approval row in the shared queue rather than a second queue', async () => {
+    expect((await submitContentForReview(DRAFT_ITEM, database)).ok).toBe(true);
+
+    const item = await database.contentItems.get(DRAFT_ITEM);
+    expect(item?.status).toBe('in_review');
+    expect(item?.approvalId).toBe(`apr-content-${DRAFT_ITEM}`);
+
+    const dataset = await readDataset(database);
+    const approval = dataset.approvals.find((row) => row.id === `apr-content-${DRAFT_ITEM}`);
+    expect(approval?.status).toBe('pending');
+    expect(approval?.kind).toBe('content');
+    expect(selectApprovals(dataset, 'pending').map((row) => row.id)).toContain(approval?.id);
+  });
+
+  it('raises a signal that inherits the item provenance', async () => {
+    await submitContentForReview(DRAFT_ITEM, database);
+    const notification = await database.notifications.get(`n-content-review-${DRAFT_ITEM}`);
+
+    expect(notification?.read).toBe(false);
+    expect(notification?.href).toBe('/approvals');
+    expect(notification?.source).toBe('demo');
+  });
+
+  it('refuses to open a gate on an item that is already through it', async () => {
+    const result = await submitContentForReview(APPROVED_ITEM, database);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toContain('cannot move straight to');
+  });
+
+  it('persists the gate across a reload and a reseed', async () => {
+    const now = new Date();
+    await submitContentForReview(DRAFT_ITEM, database, now);
+
+    const reopened = await reload();
+    await seedDemoData(reopened, new Date(now.getTime() + DAY_MS));
+
+    expect((await reopened.contentItems.get(DRAFT_ITEM))?.status).toBe('in_review');
+    expect((await reopened.approvals.get(`apr-content-${DRAFT_ITEM}`))?.status).toBe('pending');
+  });
+});
+
+describe('content approval runs the local compliance check (W4)', () => {
+  it('approves clean copy and closes the linked gate', async () => {
+    const result = await approveContentItem(REVIEW_ITEM, {}, database);
+
+    expect(result.ok).toBe(true);
+    expect(result.compliance?.clean).toBe(true);
+
+    const item = await database.contentItems.get(REVIEW_ITEM);
+    expect(item?.status).toBe('approved');
+    expect(item?.complianceCheckedAt).toBeDefined();
+    expect(item?.complianceSummary).toContain('Local keyword policy');
+    expect((await database.approvals.get('apr-linkedin'))?.status).toBe('approved');
+  });
+
+  it('refuses blocking language and leaves the item in review', async () => {
+    await database.contentItems.update(REVIEW_ITEM, {
+      body: 'A risk-free way to double your revenue.',
+    });
+
+    const result = await approveContentItem(REVIEW_ITEM, {}, database);
+
+    expect(result.ok).toBe(false);
+    expect(result.compliance?.blocking).toBe(true);
+    expect(result.compliance?.findings.map((finding) => finding.id)).toContain('risk-free');
+    expect((await database.contentItems.get(REVIEW_ITEM))?.status).toBe('in_review');
+  });
+
+  it('records an override on the item instead of hiding it', async () => {
+    await database.contentItems.update(REVIEW_ITEM, { body: 'A risk-free launch.' });
+
+    const result = await approveContentItem(REVIEW_ITEM, { override: true }, database);
+
+    expect(result.ok).toBe(true);
+    const item = await database.contentItems.get(REVIEW_ITEM);
+    expect(item?.status).toBe('approved');
+    expect(item?.complianceSummary).toContain('operator override');
+
+    const event = (await readDataset(database)).events.find((row) =>
+      row.id.startsWith(`e-content-${REVIEW_ITEM}`),
+    );
+    expect(event?.detail).toContain('operator override');
+  });
+
+  it('cannot be reached by the plain status writer', async () => {
+    await database.contentItems.update(REVIEW_ITEM, { body: 'A risk-free launch.' });
+
+    expect((await setContentStatus(REVIEW_ITEM, 'approved', {}, database)).ok).toBe(false);
+    expect((await database.contentItems.get(REVIEW_ITEM))?.status).toBe('in_review');
+  });
+});
+
+describe('content scheduling and publishing (W4)', () => {
+  it('writes a date, and says that no provider was queued', async () => {
+    const publishAt = new Date(Date.now() + 2 * DAY_MS).toISOString();
+    expect((await scheduleContentItem(APPROVED_ITEM, publishAt, database)).ok).toBe(true);
+
+    const item = await database.contentItems.get(APPROVED_ITEM);
+    expect(item?.status).toBe('scheduled');
+    expect(item?.scheduledFor).toBe(publishAt);
+
+    const event = (await readDataset(database)).events.find((row) =>
+      row.id.startsWith(`e-content-${APPROVED_ITEM}`),
+    );
+    expect(event?.detail).toContain('Nothing is queued with a provider');
+  });
+
+  it('refuses a date it cannot read and an item that is not approved', async () => {
+    expect((await scheduleContentItem(APPROVED_ITEM, 'next tuesday', database)).ok).toBe(false);
+    expect((await scheduleContentItem(DRAFT_ITEM, new Date().toISOString(), database)).ok).toBe(
+      false,
+    );
+  });
+
+  it('records a publish the operator performed elsewhere, never one it made', async () => {
+    const result = await recordContentPublished(SCHEDULED_ITEM, database);
+    expect(result.ok).toBe(true);
+
+    const item = await database.contentItems.get(SCHEDULED_ITEM);
+    expect(item?.status).toBe('published');
+    expect(item?.publishedAt).toBeDefined();
+
+    const event = (await readDataset(database)).events.find((row) =>
+      row.id.startsWith(`e-content-${SCHEDULED_ITEM}`),
+    );
+    expect(event?.detail).toContain('No connector confirmed a publish');
+  });
+
+  it('will not record a publish on a draft that skipped the gate', async () => {
+    const result = await recordContentPublished(DRAFT_ITEM, database);
+    expect(result.ok).toBe(false);
+    expect((await database.contentItems.get(DRAFT_ITEM))?.publishedAt).toBeUndefined();
+  });
+
+  it("leaves today's plan once it is published", async () => {
+    const now = new Date();
+    const before = await readDataset(database);
+    expect(contentDueToday(before, now).map((row) => row.id)).toContain(SCHEDULED_ITEM);
+    const todayBefore = buildMorningBrief(before, now).sections.find(
+      (section) => section.id === 'today',
+    );
+
+    await recordContentPublished(SCHEDULED_ITEM, database, now);
+
+    const after = await readDataset(database);
+    expect(contentDueToday(after, now).map((row) => row.id)).not.toContain(SCHEDULED_ITEM);
+
+    const todayAfter = buildMorningBrief(after, now).sections.find(
+      (section) => section.id === 'today',
+    );
+    expect(todayAfter?.total).toBe((todayBefore?.total ?? 0) - 1);
+    expect(todayAfter?.items.some((row) => row.id === `content:${SCHEDULED_ITEM}`)).toBe(false);
+  });
+});
+
+describe('idea vault writes (W4)', () => {
+  it('captures an operator-owned idea that survives a reseed and an opt-out', async () => {
+    const now = new Date();
+    const idea = await captureContentIdea({ title: '  Three failure modes  ' }, database, now);
+
+    expect(idea?.title).toBe('Three failure modes');
+    expect(idea?.source).toBe('local');
+    expect(idea?.status).toBe('captured');
+    expect(idea?.touchedAt).toBeDefined();
+
+    await seedDemoData(database, new Date(now.getTime() + DAY_MS));
+    expect((await database.contentIdeas.get(idea!.id))?.title).toBe('Three failure modes');
+
+    await clearDemoData(database);
+    expect((await readDataset(database)).contentIdeas.map((row) => row.id)).toEqual([idea!.id]);
+  });
+
+  it('refuses an empty title', async () => {
+    expect(await captureContentIdea({ title: '   ' }, database)).toBeNull();
+  });
+
+  it('clamps a score to the one-to-five band it prints', async () => {
+    const idea = await captureContentIdea({ title: 'Scored', reach: 99, effort: 0 }, database);
+    expect(idea?.reach).toBe(5);
+    expect(idea?.effort).toBe(1);
+
+    expect(await scoreContentIdea(idea!.id, { confidence: -4 }, database)).toBe(true);
+    expect((await database.contentIdeas.get(idea!.id))?.confidence).toBe(1);
+    expect(await scoreContentIdea('idea-nobody', { reach: 2 }, database)).toBe(false);
+  });
+
+  it('parks an idea without promoting it', async () => {
+    expect(await setIdeaStatus(VAULT_IDEA, 'parked', database)).toBe(true);
+    expect((await database.contentIdeas.get(VAULT_IDEA))?.status).toBe('parked');
+  });
+
+  it('promotes an idea into a linked draft, once', async () => {
+    const promoted = await promoteContentIdea(VAULT_IDEA, database);
+
+    expect(promoted?.item.status).toBe('drafting');
+    expect(promoted?.item.ideaId).toBe(VAULT_IDEA);
+    expect(promoted?.item.source).toBe('local');
+    expect((await database.contentIdeas.get(VAULT_IDEA))?.status).toBe('promoted');
+    expect((await database.contentIdeas.get(VAULT_IDEA))?.promotedItemId).toBe(promoted?.item.id);
+
+    expect(await promoteContentIdea(VAULT_IDEA, database)).toBeNull();
+  });
+
+  it('drops the promoted idea out of the vault list', async () => {
+    const before = selectIdeas(await readDataset(database)).map((idea) => idea.id);
+    expect(before).toContain(VAULT_IDEA);
+
+    await promoteContentIdea(VAULT_IDEA, database);
+
+    expect(selectIdeas(await readDataset(database)).map((idea) => idea.id)).not.toContain(
+      VAULT_IDEA,
+    );
+  });
+});
+
 describe('demo opt-out is still absolute (M1)', () => {
   it('removes rows the operator acted on and keeps them gone across a reload', async () => {
     await decideApproval(PENDING_GATE, 'approved', database);
@@ -437,6 +727,8 @@ describe('demo opt-out is still absolute (M1)', () => {
     await setTaskStatus(OPEN_TASK, 'done', database);
     await setOpportunityStage(OPPORTUNITY, 'won', database);
     await saveMeetingNotes(PAST_MEETING, 'Closed out.', database);
+    await submitContentForReview(DRAFT_ITEM, database);
+    await approveContentItem(REVIEW_ITEM, {}, database);
 
     await clearDemoData(database);
     const reopened = await reload();
@@ -450,5 +742,9 @@ describe('demo opt-out is still absolute (M1)', () => {
     expect(dataset.tasks).toHaveLength(0);
     expect(dataset.opportunities).toHaveLength(0);
     expect(dataset.meetings).toHaveLength(0);
+    expect(dataset.contentItems).toHaveLength(0);
+    expect(dataset.contentIdeas).toHaveLength(0);
+    expect(dataset.contentMetrics).toHaveLength(0);
+    expect(dataset.campaigns).toHaveLength(0);
   });
 });
