@@ -120,6 +120,13 @@ describe('command registry', () => {
     }
   });
 
+  it('reaches the Wave 7 surface', () => {
+    const ids = new Set(commands().map((command) => command.id));
+
+    expect(ids.has('navigate:sync')).toBe(true);
+    expect(ids.has('surface:sync')).toBe(true);
+  });
+
   it('runs the mark-all-read action instead of navigating', async () => {
     const markAllRead = vi.fn(() => Promise.resolve());
     const command = buildCommands({

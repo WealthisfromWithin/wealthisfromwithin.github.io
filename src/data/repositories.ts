@@ -1,6 +1,6 @@
 import type { EntityTable, Table } from 'dexie';
 import { db, META_KEYS, type SovereignDb } from './db';
-import { buildDemoDataset, SEED_VERSION } from './seed';
+import { SEED_VERSION } from './seedVersion';
 import { DATASET_KEYS, emptyDataset, type SovereignDataset } from './dataset';
 import type { DataSource } from '@/domain';
 import { DAY_MS } from '@/lib/clock';
@@ -80,6 +80,11 @@ function transactionTables(database: SovereignDb): Table[] {
  * explicit request for demo data, so it also revokes any demo opt-out.
  */
 export async function seedDemoData(database: SovereignDb, now: Date): Promise<void> {
+  // Imported here rather than at module scope so the ~80 KB of demo fixtures
+  // stays out of the first load (TD-16). A boot that does not need to reseed —
+  // a reload inside the seed's 12-hour window, or a store the operator cleared
+  // — never fetches this chunk at all.
+  const { buildDemoDataset } = await import('./seed');
   const dataset = buildDemoDataset(now);
 
   await database.transaction('rw', transactionTables(database), async () => {

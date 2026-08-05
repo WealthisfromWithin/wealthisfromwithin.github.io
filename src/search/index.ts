@@ -10,6 +10,7 @@ import {
   opportunityHref,
   personHref,
 } from '@/app/href';
+import { effectiveIntegrationState } from '@/integrations/state';
 import { formatCurrencyCents } from '@/lib/format';
 import {
   contentFormatLabel,
@@ -26,6 +27,7 @@ import { pipelineStageLabel } from '@/modules/pipeline/pipeline';
 import { projectStatusLabel } from '@/modules/projects/projects';
 import { promptIntentLabel } from '@/modules/prompts/prompts';
 import { researchStatusLabel } from '@/modules/research/research';
+import { COMMAND_API_INTEGRATION_ID } from '@/modules/sync/sync';
 import { taskStatusLabel } from '@/modules/tasks/tasks';
 import { rankByFuzzy, type RankedResult } from './fuzzy';
 
@@ -283,10 +285,18 @@ export function buildSearchIndex(dataset: SovereignDataset): SearchDocument[] {
       id: `integration:${integration.id}`,
       kind: 'integration',
       title: integration.name,
-      subtitle: integration.state.replace('_', ' '),
+      // The state a reader would see on the surface, so a search hit and the
+      // registry row cannot disagree about whether something is connected.
+      subtitle: effectiveIntegrationState(integration).replace('_', ' '),
       keywords: [...integration.capabilities, integration.category],
-      // An MCP row is read on the panel that explains it, not in the long table.
-      route: integration.category === 'mcp' ? '/integrations/mcp' : '/integrations',
+      // Each row is read where it is explained: an MCP server on the panel, the
+      // Command API on the adapter that probes it, everything else in the table.
+      route:
+        integration.id === COMMAND_API_INTEGRATION_ID
+          ? '/sync'
+          : integration.category === 'mcp'
+            ? '/integrations/mcp'
+            : '/integrations',
       demo: integration.source === 'demo',
     });
   }

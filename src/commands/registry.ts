@@ -280,6 +280,17 @@ export function buildCommands(actions: CommandActions): Command[] {
       },
     },
     {
+      id: 'surface:sync',
+      label: 'Check the Command API adapter',
+      hint: 'Its state, the one probe it can run, and everything it does not do.',
+      keywords: ['sync', 'api', 'command api', 'contentdone', 'probe', 'health', 'remote'],
+      group: 'surface',
+      icon: Database,
+      run: () => {
+        actions.navigate('/sync');
+      },
+    },
+    {
       id: 'surface:knowledge-pinned',
       label: 'Pinned knowledge',
       hint: 'What the operation knows, with the records each note is about.',

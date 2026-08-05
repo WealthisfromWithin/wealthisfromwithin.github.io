@@ -67,6 +67,25 @@ describe('searchDocuments', () => {
     expect(results[0]?.item.demo).toBe(false);
   });
 
+  it('routes the Command API row at the adapter that probes it', () => {
+    const results = searchDocuments('contentdone api', index);
+    expect(results[0]?.item.route).toBe('/sync');
+    expect(results[0]?.item.subtitle).toBe('awaiting credentials');
+  });
+
+  it('never labels a search hit connected without the probe behind it', () => {
+    const dataset = buildDemoDataset(now);
+    const claimed = {
+      ...dataset,
+      integrations: dataset.integrations.map((integration) =>
+        integration.id === 'contentdone' ? { ...integration, state: 'connected' as const } : integration,
+      ),
+    };
+    const results = searchDocuments('contentdone api', buildSearchIndex(claimed));
+
+    expect(results[0]?.item.subtitle).toBe('awaiting credentials');
+  });
+
   it('finds a seeded notification and sends it to the inbox', () => {
     const results = searchDocuments('learning digest', index);
     const signal = results.find((result) => result.item.kind === 'notification');

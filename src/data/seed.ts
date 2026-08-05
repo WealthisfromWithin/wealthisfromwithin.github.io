@@ -1,9 +1,14 @@
 import { integrationCatalog } from '@/integrations/catalog';
 import { addDays, DAY_MS, HOUR_MS, startOfWeek } from '@/lib/clock';
 import type { SovereignDataset } from './dataset';
+import { SEED_VERSION } from './seedVersion';
 
-/** Seed contents are versioned so a shape change reseeds the local demo rows. */
-export const SEED_VERSION = 'wave6.0';
+/**
+ * Seed contents are versioned so a shape change reseeds the local demo rows.
+ * The constant lives in `seedVersion.ts` so a boot can check it without pulling
+ * this module's fixtures into the first load.
+ */
+export { SEED_VERSION };
 
 const DEMO = 'demo' as const;
 

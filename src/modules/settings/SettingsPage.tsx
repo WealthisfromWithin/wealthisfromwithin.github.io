@@ -5,7 +5,7 @@ import { enabledModules, plannedModules } from '@/app/modules';
 import { db } from '@/data/db';
 import { countDemoRows, countRows } from '@/data/dataset';
 import { clearDemoData, resetLocalStore, seedDemoData } from '@/data/repositories';
-import { SEED_VERSION } from '@/data/seed';
+import { SEED_VERSION } from '@/data/seedVersion';
 import { useDemoOptOut } from '@/data/useDataset';
 import { agentKernel } from '@/agents';
 import { countByState } from '@/integrations/state';
