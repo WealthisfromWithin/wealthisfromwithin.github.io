@@ -38,7 +38,12 @@ function rule(overrides: Partial<AutomationRule> = {}): AutomationRule {
   });
 }
 
-function integration(id: string, state: Integration['state']): Integration {
+function integration(
+  id: string,
+  state: Integration['state'],
+  /** Present by default for a Connected row, because the invariant demands it. */
+  lastProbedAt: string | undefined = state === 'connected' ? stamp : undefined,
+): Integration {
   return {
     id,
     name: id,
@@ -49,8 +54,14 @@ function integration(id: string, state: Integration['state']): Integration {
     state,
     capabilities: [],
     rationale: '',
+    lastProbedAt,
     substrate: false,
   };
+}
+
+/** A row that says Connected with no probe behind the claim. */
+function unverified(id: string): Integration {
+  return { ...integration(id, 'connected'), lastProbedAt: undefined };
 }
 
 /** A store with one row of each shape a trigger can read. */
@@ -379,6 +390,54 @@ describe('automationReadiness', () => {
       runnable: true,
       reason: undefined,
     });
+  });
+
+  /**
+   * The connected-probe invariant on the action side
+   * (`docs/reviews/WAVE_7_GPT_REVIEW.md` H1). This gate decides whether a rule
+   * may write, so it has to reach the same verdict `/integrations` shows — a
+   * row hand-edited to `connected` with no probe behind it is not a connector.
+   */
+  it('refuses a rule whose integration claims Connected with no probe', () => {
+    const readiness = automationReadiness(rule({ requiresIntegrationId: 'n8n' }), [
+      unverified('n8n'),
+    ]);
+
+    expect({ runnable: readiness.runnable, reason: readiness.reason }).toEqual({
+      runnable: false,
+      reason: 'awaiting_credentials',
+    });
+    expect(readiness.statement).toContain('awaiting credentials');
+  });
+
+  it('refuses a rule whose integration carries an unparseable probe timestamp', () => {
+    const readiness = automationReadiness(rule({ requiresIntegrationId: 'n8n' }), [
+      integration('n8n', 'connected', 'whenever'),
+    ]);
+
+    expect(readiness.runnable).toBe(false);
+    expect(readiness.statement).toContain('awaiting credentials');
+  });
+
+  it('runs a rule whose integration carries the probe that verified it', () => {
+    const readiness = automationReadiness(rule({ requiresIntegrationId: 'n8n' }), [
+      integration('n8n', 'connected'),
+    ]);
+
+    expect({ runnable: readiness.runnable, reason: readiness.reason }).toEqual({
+      runnable: true,
+      reason: undefined,
+    });
+  });
+
+  it('counts an unverified Connected row as a credential gap, like every other surface', () => {
+    const matches = evaluateAutomation(
+      rule({ trigger: 'integration_credential_gap' }),
+      context({ integrations: [unverified('n8n'), integration('slack', 'connected')] }),
+      new Date(stamp),
+    );
+
+    expect(matches.map((match) => match.id)).toEqual(['n8n']);
   });
 });
 

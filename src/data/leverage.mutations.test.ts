@@ -23,6 +23,9 @@ const LOG_ONLY = 'aut-credential-watch';
 const HANDOFF = 'aut-publish-fanout';
 const DISABLED = 'aut-research-due';
 
+/** A seeded registry row a rule can name. Seeded as Awaiting Credentials. */
+const GATED_INTEGRATION = 'n8n';
+
 const SEEDED_CONTENT_GATE = 'apr-automation-content';
 const SEEDED_CONTENT_RUN = 'run-content-today';
 
@@ -176,6 +179,63 @@ describe('running an automation', () => {
   it('says so rather than throwing when the rule is not in the store', async () => {
     const result = await runAutomation('aut-nope', database);
     expect({ ok: result.ok, run: result.run }).toEqual({ ok: false, run: undefined });
+  });
+
+  /**
+   * The connected-probe invariant reaches the write path
+   * (`docs/reviews/WAVE_7_GPT_REVIEW.md` H1). A store row edited to `connected`
+   * without the probe that justifies it — by hand, or by a future writer that
+   * forgets — must not make a rule runnable, because `/integrations` reads that
+   * same row as Awaiting Credentials.
+   */
+  it('refuses a rule whose integration claims Connected with no probe behind it', async () => {
+    await database.integrations.update(GATED_INTEGRATION, {
+      state: 'connected',
+      lastProbedAt: undefined,
+    });
+    const rule = await createAutomationRule(
+      {
+        name: 'Notify on a credential gap',
+        trigger: 'task_overdue',
+        action: 'notify',
+        requiresApproval: false,
+        requiresIntegrationId: GATED_INTEGRATION,
+      },
+      database,
+    );
+    const notificationsBefore = await database.notifications.count();
+
+    const result = await runAutomation(rule?.id ?? '', database);
+
+    expect({ ok: result.ok, outcome: result.outcome, reason: result.run?.reason }).toEqual({
+      ok: false,
+      outcome: 'refused',
+      reason: 'awaiting_credentials',
+    });
+    expect(result.run?.detail).toContain('awaiting credentials');
+    expect(result.run?.matched).toBe(0);
+    expect(await database.notifications.count()).toBe(notificationsBefore);
+  });
+
+  it('runs the same rule once the row carries the probe that verified it', async () => {
+    await database.integrations.update(GATED_INTEGRATION, {
+      state: 'connected',
+      lastProbedAt: '2026-08-05T06:00:00.000Z',
+    });
+    const rule = await createAutomationRule(
+      {
+        name: 'Notify on overdue tasks',
+        trigger: 'task_overdue',
+        action: 'notify',
+        requiresApproval: false,
+        requiresIntegrationId: GATED_INTEGRATION,
+      },
+      database,
+    );
+
+    const result = await runAutomation(rule?.id ?? '', database);
+
+    expect({ ok: result.ok, outcome: result.outcome }).toEqual({ ok: true, outcome: 'applied' });
   });
 
   it('runs every enabled rule and reports the refusals with the rest', async () => {

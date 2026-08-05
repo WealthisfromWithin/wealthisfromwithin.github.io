@@ -115,6 +115,34 @@ describe('ContentItemPage', () => {
     ).toBeDefined();
   });
 
+  /**
+   * The connected-probe invariant on the publishing copy
+   * (`docs/reviews/WAVE_7_GPT_REVIEW.md` H1). This panel names a registry row,
+   * so it has to name the state `/integrations` shows for it — otherwise a
+   * hand-edited row reads as a live publishing connector here and as Awaiting
+   * Credentials three clicks away.
+   */
+  it('reads a Connected connector with no probe as Awaiting Credentials', async () => {
+    await db.integrations.update('linkedin', { state: 'connected', lastProbedAt: undefined });
+    renderItem('c-advisory-loop');
+    await screen.findByRole('heading', { name: 'The advisory loop, drawn once' });
+
+    expect(await screen.findByText(/LinkedIn is Awaiting Credentials/)).toBeDefined();
+    expect(screen.getByText(/Nothing can be sent from here/)).toBeDefined();
+  });
+
+  it('still refuses to publish when the connector carries a verified probe', async () => {
+    await db.integrations.update('linkedin', {
+      state: 'connected',
+      lastProbedAt: '2026-08-05T06:00:00.000Z',
+    });
+    renderItem('c-advisory-loop');
+    await screen.findByRole('heading', { name: 'The advisory loop, drawn once' });
+
+    expect(await screen.findByText(/LinkedIn is Connected/)).toBeDefined();
+    expect(screen.getByText(/this surface holds no publishing credential/)).toBeDefined();
+  });
+
   it('says an item is not here rather than rendering an empty package', async () => {
     renderItem('c-nobody');
 
