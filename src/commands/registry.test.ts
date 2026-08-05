@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { isSafeInternalHref } from '@/app/href';
 import { enabledModules } from '@/app/modules';
 import { buildCommands, commandGroupLabel, type Command } from './registry';
 
@@ -35,6 +36,19 @@ describe('command registry', () => {
     }
   });
 
+  it('navigates only to hrefs the allowlist would let a record link use', () => {
+    const paths: string[] = [];
+
+    for (const command of commands((path) => paths.push(path))) {
+      void command.run();
+    }
+
+    expect(paths.length).toBeGreaterThan(0);
+    for (const path of paths) {
+      expect({ path, safe: isSafeInternalHref(path) }).toEqual({ path, safe: true });
+    }
+  });
+
   it('reaches the Wave 2 surfaces', () => {
     const ids = new Set(commands().map((command) => command.id));
 
@@ -44,6 +58,27 @@ describe('command registry', () => {
     expect(ids.has('act:approvals-pending')).toBe(true);
     expect(ids.has('act:inbox-unread')).toBe(true);
     expect(ids.has('act:mark-all-read')).toBe(true);
+  });
+
+  it('reaches the Wave 3 revenue and relationship surfaces', () => {
+    const ids = new Set(commands().map((command) => command.id));
+
+    for (const id of [
+      'navigate:crm',
+      'navigate:pipeline',
+      'navigate:tasks',
+      'navigate:projects',
+      'navigate:calendar',
+      'navigate:meetings',
+      'act:pipeline-stalled',
+      'act:tasks-open',
+      'act:tasks-blocked',
+      'act:crm-dormant',
+      'surface:calendar-week',
+      'surface:meetings-notes',
+    ]) {
+      expect({ id, offered: ids.has(id) }).toEqual({ id, offered: true });
+    }
   });
 
   it('runs the mark-all-read action instead of navigating', async () => {
