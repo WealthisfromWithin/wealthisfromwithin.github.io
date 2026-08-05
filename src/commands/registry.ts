@@ -1,5 +1,19 @@
 import type { LucideIcon } from 'lucide-react';
-import { Activity, ArrowRight, CheckCheck, Database, Inbox, RefreshCw, Search, ShieldCheck } from 'lucide-react';
+import {
+  Activity,
+  ArrowRight,
+  CalendarDays,
+  CheckCheck,
+  Database,
+  Flame,
+  Inbox,
+  ListChecks,
+  NotebookPen,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  TrendingUp,
+} from 'lucide-react';
 import { enabledModules } from '@/app/modules';
 
 export type CommandGroup = 'navigate' | 'act' | 'store' | 'surface';
@@ -75,6 +89,72 @@ export function buildCommands(actions: CommandActions): Command[] {
       keywords: ['inbox', 'clear', 'read', 'notifications'],
       icon: CheckCheck,
       run: actions.markAllRead,
+    },
+    {
+      id: 'act:pipeline-stalled',
+      label: 'Review the open pipeline',
+      hint: 'Open opportunities ranked by expected value, stalled deals flagged.',
+      group: 'act',
+      keywords: ['pipeline', 'opportunities', 'revenue', 'stalled', 'deals'],
+      icon: TrendingUp,
+      run: () => {
+        actions.navigate('/pipeline');
+      },
+    },
+    {
+      id: 'act:tasks-open',
+      label: 'Review open tasks',
+      hint: 'Every task that is not done, overdue first.',
+      group: 'act',
+      keywords: ['tasks', 'todo', 'work', 'overdue', 'execution'],
+      icon: ListChecks,
+      run: () => {
+        actions.navigate('/tasks?status=open');
+      },
+    },
+    {
+      id: 'act:tasks-blocked',
+      label: 'Review blocked work',
+      hint: 'Tasks that cannot move, with the reason recorded on each.',
+      group: 'act',
+      keywords: ['blocked', 'stuck', 'tasks', 'reason'],
+      icon: ListChecks,
+      run: () => {
+        actions.navigate('/tasks?status=blocked');
+      },
+    },
+    {
+      id: 'act:crm-dormant',
+      label: 'Review dormant relationships',
+      hint: 'People with no recorded touch in three weeks or more.',
+      group: 'act',
+      keywords: ['crm', 'dormant', 'relationship', 'people', 'cold'],
+      icon: Flame,
+      run: () => {
+        actions.navigate('/crm?temperature=dormant');
+      },
+    },
+    {
+      id: 'surface:calendar-week',
+      label: 'Open this week',
+      hint: 'Meetings and work due, merged into one agenda.',
+      group: 'surface',
+      keywords: ['calendar', 'week', 'agenda', 'schedule', 'time'],
+      icon: CalendarDays,
+      run: () => {
+        actions.navigate('/calendar');
+      },
+    },
+    {
+      id: 'surface:meetings-notes',
+      label: 'Meetings awaiting notes',
+      hint: 'Past meetings with nothing written about what happened.',
+      group: 'surface',
+      keywords: ['meetings', 'notes', 'past', 'record'],
+      icon: NotebookPen,
+      run: () => {
+        actions.navigate('/meetings?when=past');
+      },
     },
     {
       id: 'surface:health',

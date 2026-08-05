@@ -1,11 +1,18 @@
 import type { SovereignDataset } from '@/data/dataset';
+import { companyHref, opportunityHref, personHref } from '@/app/href';
 import { formatCurrencyCents } from '@/lib/format';
+import { meetingKindLabel } from '@/modules/meetings/meetings';
+import { pipelineStageLabel } from '@/modules/pipeline/pipeline';
+import { projectStatusLabel } from '@/modules/projects/projects';
+import { taskStatusLabel } from '@/modules/tasks/tasks';
 import { rankByFuzzy, type RankedResult } from './fuzzy';
 
 export type SearchKind =
   | 'person'
   | 'company'
   | 'task'
+  | 'project'
+  | 'meeting'
   | 'mission'
   | 'opportunity'
   | 'content'
@@ -27,6 +34,8 @@ export const searchKindLabel: Record<SearchKind, string> = {
   person: 'Person',
   company: 'Company',
   task: 'Task',
+  project: 'Project',
+  meeting: 'Meeting',
   mission: 'Mission',
   opportunity: 'Opportunity',
   content: 'Content',
@@ -52,8 +61,8 @@ export function buildSearchIndex(dataset: SovereignDataset): SearchDocument[] {
       subtitle: [person.role, person.companyId ? companies.get(person.companyId) : undefined]
         .filter(Boolean)
         .join(' · '),
-      keywords: [...person.tags, person.email ?? ''],
-      route: '/',
+      keywords: [...person.tags, person.email ?? '', person.notes],
+      route: personHref(person.id),
       demo: person.source === 'demo',
     });
   }
@@ -63,9 +72,9 @@ export function buildSearchIndex(dataset: SovereignDataset): SearchDocument[] {
       id: `company:${company.id}`,
       kind: 'company',
       title: company.name,
-      subtitle: company.segment,
+      subtitle: [company.segment, company.status].filter(Boolean).join(' · '),
       keywords: [company.domain ?? ''],
-      route: '/',
+      route: companyHref(company.id),
       demo: company.source === 'demo',
     });
   }
@@ -75,10 +84,39 @@ export function buildSearchIndex(dataset: SovereignDataset): SearchDocument[] {
       id: `task:${task.id}`,
       kind: 'task',
       title: task.title,
-      subtitle: `${task.status.replace('_', ' ')} · ${task.priority}`,
+      subtitle: `${taskStatusLabel[task.status]} · ${task.priority}`,
       keywords: [task.context, task.blockedReason ?? ''],
-      route: '/',
+      route: task.status === 'done' ? '/tasks?status=done' : '/tasks',
       demo: task.source === 'demo',
+    });
+  }
+
+  for (const project of dataset.projects) {
+    documents.push({
+      id: `project:${project.id}`,
+      kind: 'project',
+      title: project.title,
+      subtitle: projectStatusLabel[project.status],
+      keywords: [project.objective, project.blockedReason ?? ''],
+      route: '/projects?status=all',
+      demo: project.source === 'demo',
+    });
+  }
+
+  for (const meeting of dataset.meetings) {
+    documents.push({
+      id: `meeting:${meeting.id}`,
+      kind: 'meeting',
+      title: meeting.title,
+      subtitle: [
+        meetingKindLabel[meeting.kind],
+        meeting.companyId ? companies.get(meeting.companyId) : undefined,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      keywords: [meeting.notes, meeting.location],
+      route: '/meetings?when=all',
+      demo: meeting.source === 'demo',
     });
   }
 
@@ -99,9 +137,9 @@ export function buildSearchIndex(dataset: SovereignDataset): SearchDocument[] {
       id: `opportunity:${opportunity.id}`,
       kind: 'opportunity',
       title: opportunity.name,
-      subtitle: `${opportunity.stage} · ${formatCurrencyCents(opportunity.valueCents)}`,
-      keywords: [opportunity.nextStep, opportunity.signal],
-      route: '/',
+      subtitle: `${pipelineStageLabel[opportunity.stage]} · ${formatCurrencyCents(opportunity.valueCents)}`,
+      keywords: [opportunity.nextStep, opportunity.signal, opportunity.leadSource],
+      route: opportunityHref(opportunity.id),
       demo: opportunity.source === 'demo',
     });
   }

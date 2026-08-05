@@ -1,9 +1,17 @@
 import type { SovereignDataset } from '@/data/dataset';
-import { normalizeInternalHref } from '@/app/href';
-import { DAY_MS, startOfDay, endOfDay } from '@/lib/clock';
+import { normalizeInternalHref, opportunityHref } from '@/app/href';
+import { DAY_MS, formatClockTime } from '@/lib/clock';
 import { formatCurrencyCents, formatDelta, formatMetricValue } from '@/lib/format';
-import { priorityRank } from '@/domain';
 import { countByState } from '@/integrations/state';
+import { dayAgenda } from '@/modules/calendar/calendar';
+import {
+  daysInStage,
+  expectedValueCents,
+  isStalled,
+  pipelineStageLabel,
+  selectOpportunities,
+} from '@/modules/pipeline/pipeline';
+import { isOverdue } from '@/modules/tasks/tasks';
 
 export const BRIEF_QUESTIONS = [
   'attention',
@@ -47,6 +55,13 @@ export interface MorningBrief {
 
 const SECTION_LIMIT = 6;
 
+/**
+ * The attention question is the one the surface exists to answer, and Wave 3
+ * gave it two more sources (overdue work and stalled deals). It gets a deeper cut
+ * before truncation; every section still prints `shown/total` when it truncates.
+ */
+const ATTENTION_LIMIT = 9;
+
 function isDemo(source: string): boolean {
   return source === 'demo';
 }
@@ -81,10 +96,7 @@ function attentionSection(dataset: SovereignDataset, now: Date): BriefItem[] {
     });
   }
 
-  const overdue = dataset.tasks.filter(
-    (task) => task.status !== 'done' && task.dueAt !== undefined && Date.parse(task.dueAt) < now.getTime(),
-  );
-  for (const task of overdue) {
+  for (const task of dataset.tasks.filter((task) => isOverdue(task, now))) {
     items.push({
       id: `task:${task.id}`,
       title: `Overdue: ${task.title}`,
@@ -92,6 +104,26 @@ function attentionSection(dataset: SovereignDataset, now: Date): BriefItem[] {
       meta: task.priority,
       tone: task.priority === 'critical' ? 'critical' : 'warning',
       demo: isDemo(task.source),
+      href: '/tasks?status=open',
+    });
+  }
+
+  // A deal that has not moved in two weeks is asking for a decision as loudly
+  // as an open gate; the pipeline is where that decision gets made.
+  for (const opportunity of dataset.opportunities) {
+    if (!isStalled(opportunity, now)) continue;
+    const days = daysInStage(opportunity, now);
+    items.push({
+      id: `opportunity:${opportunity.id}`,
+      title: `Stalled: ${opportunity.name}`,
+      detail:
+        opportunity.nextStep.length > 0
+          ? `Next step on the record: ${opportunity.nextStep}.`
+          : 'No next step is recorded, so nothing will move it.',
+      meta: `${pipelineStageLabel[opportunity.stage]} · ${days === null ? '—' : `${String(days)}d`}`,
+      tone: 'warning',
+      demo: isDemo(opportunity.source),
+      href: opportunityHref(opportunity.id),
     });
   }
 
@@ -112,62 +144,79 @@ function attentionSection(dataset: SovereignDataset, now: Date): BriefItem[] {
   return items.sort((a, b) => toneOrder[a.tone] - toneOrder[b.tone]);
 }
 
+/** Reads the pipeline module's own selector so the Brief and `/pipeline` agree. */
 function opportunitySection(dataset: SovereignDataset): BriefItem[] {
   const companies = new Map(dataset.companies.map((company) => [company.id, company.name]));
 
-  return dataset.opportunities
-    .filter((opportunity) => opportunity.stage !== 'won' && opportunity.stage !== 'lost')
-    .sort(
-      (a, b) => b.valueCents * b.probability - a.valueCents * a.probability,
-    )
-    .map((opportunity) => ({
-      id: `opportunity:${opportunity.id}`,
-      title: opportunity.name,
-      detail: [
-        opportunity.companyId ? companies.get(opportunity.companyId) : undefined,
-        opportunity.stage,
-        opportunity.signal,
-      ]
-        .filter(Boolean)
-        .join(' · '),
-      meta: `${formatCurrencyCents(opportunity.valueCents)} · ${String(opportunity.probability)}%`,
-      tone: opportunity.probability >= 60 ? 'info' : 'neutral',
-      demo: isDemo(opportunity.source),
-    }));
+  return selectOpportunities(dataset, 'open').map((opportunity) => ({
+    id: `opportunity:${opportunity.id}`,
+    title: opportunity.name,
+    detail: [
+      opportunity.companyId ? companies.get(opportunity.companyId) : undefined,
+      pipelineStageLabel[opportunity.stage],
+      opportunity.signal,
+    ]
+      .filter(Boolean)
+      .join(' · '),
+    meta: `${formatCurrencyCents(expectedValueCents(opportunity))} exp · ${String(opportunity.probability)}%`,
+    tone: opportunity.probability >= 60 ? 'info' : 'neutral',
+    demo: isDemo(opportunity.source),
+    href: opportunityHref(opportunity.id),
+  }));
 }
 
+/**
+ * Today is the calendar's own agenda — meetings and work due before midnight —
+ * plus work already in flight, which has no time but is the thing being done.
+ */
 function todaySection(dataset: SovereignDataset, now: Date): BriefItem[] {
-  const dayStart = startOfDay(now).getTime();
-  const dayEnd = endOfDay(now).getTime();
+  // Blocked work belongs to the blocked question, not to today's plan.
+  const blocked = new Set(
+    dataset.tasks.filter((task) => task.status === 'blocked').map((task) => task.id),
+  );
 
-  const candidates = dataset.tasks.filter((task) => {
-    if (task.status === 'done' || task.status === 'blocked') return false;
-    if (task.status === 'in_progress') return true;
-    if (!task.dueAt) return false;
-    const due = Date.parse(task.dueAt);
-    return due >= dayStart && due <= dayEnd;
-  });
+  const items: BriefItem[] = dayAgenda(dataset, now)
+    .filter((entry) => !entry.done && !(entry.kind === 'task' && blocked.has(entry.recordId)))
+    .map((entry) => ({
+      id: `${entry.kind}:${entry.recordId}`,
+      title: entry.kind === 'meeting' ? `${formatClockTime(new Date(entry.at))} ${entry.title}` : entry.title,
+      detail: entry.detail,
+      meta: entry.meta,
+      tone: entry.kind === 'meeting' ? 'info' : 'neutral',
+      demo: entry.demo,
+      href: entry.kind === 'meeting' ? '/meetings' : '/tasks?status=open',
+    }));
 
-  return candidates
-    .sort((a, b) => {
-      const byPriority = priorityRank[a.priority] - priorityRank[b.priority];
-      if (byPriority !== 0) return byPriority;
-      return (a.dueAt ? Date.parse(a.dueAt) : Number.MAX_SAFE_INTEGER) -
-        (b.dueAt ? Date.parse(b.dueAt) : Number.MAX_SAFE_INTEGER);
-    })
-    .map((task) => ({
+  const alreadyListed = new Set(items.map((item) => item.id));
+  for (const task of dataset.tasks) {
+    if (task.status !== 'in_progress') continue;
+    if (alreadyListed.has(`task:${task.id}`)) continue;
+    items.push({
       id: `task:${task.id}`,
       title: task.title,
       detail: task.context,
-      meta: [
-        task.priority,
-        task.status === 'in_progress' ? 'in progress' : null,
-        task.estimateMinutes ? `${String(task.estimateMinutes)}m` : null,
-      ]
-        .filter((part): part is string => Boolean(part))
-        .join(' · '),
-      tone: task.priority === 'critical' ? 'critical' : task.priority === 'high' ? 'warning' : 'neutral',
+      meta: [task.priority, 'in progress'].join(' · '),
+      tone: task.priority === 'critical' ? 'critical' : 'neutral',
       demo: isDemo(task.source),
+      href: '/tasks?status=in_progress',
+    });
+  }
+
+  // Meetings and dated work in clock order, then undated work in flight.
+  return items;
+}
+
+function blockedProjects(dataset: SovereignDataset): BriefItem[] {
+  return dataset.projects
+    .filter((project) => project.status === 'blocked')
+    .map((project) => ({
+      id: `project:${project.id}`,
+      title: project.title,
+      detail: project.blockedReason ?? 'No reason recorded.',
+      meta: 'project',
+      tone: 'warning' as const,
+      demo: isDemo(project.source),
+      href: '/projects?status=blocked',
     }));
 }
 
@@ -202,8 +251,11 @@ function blockedSection(dataset: SovereignDataset): BriefItem[] {
       meta: task.blockedSince ? `blocked since ${task.blockedSince.slice(0, 10)}` : 'task',
       tone: 'warning',
       demo: isDemo(task.source),
+      href: '/tasks?status=blocked',
     });
   }
+
+  items.push(...blockedProjects(dataset));
 
   for (const mission of dataset.missions) {
     if (mission.status !== 'blocked') continue;
@@ -297,7 +349,7 @@ export function buildMorningBrief(dataset: SovereignDataset, now: Date): Morning
   ] satisfies Omit<BriefSection, 'total'>[]).map((section) => ({
     ...section,
     total: section.items.length,
-    items: section.items.slice(0, SECTION_LIMIT),
+    items: section.items.slice(0, section.id === 'attention' ? ATTENTION_LIMIT : SECTION_LIMIT),
   }));
 
   const demoItemCount = sections

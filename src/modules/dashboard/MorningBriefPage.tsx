@@ -7,6 +7,8 @@ import { cn } from '@/lib/cn';
 import { DemoBadge, SectionLabel } from '@/ui/primitives';
 import { approvalCounts } from '@/modules/approvals/queue';
 import { unreadCount } from '@/modules/inbox/notifications';
+import { pipelineSummary } from '@/modules/pipeline/pipeline';
+import { taskCounts } from '@/modules/tasks/tasks';
 import { buildMorningBrief, type BriefItem, type BriefSection, type BriefTone } from './brief';
 
 const toneAccent: Record<BriefTone, string> = {
@@ -93,9 +95,8 @@ export function MorningBriefPage() {
   const brief = useMemo(() => buildMorningBrief(dataset, now), [dataset, now]);
   const health = deriveSubstrateHealth(dataset.integrations);
 
-  const openPipelineCents = dataset.opportunities
-    .filter((opportunity) => opportunity.stage !== 'won' && opportunity.stage !== 'lost')
-    .reduce((total, opportunity) => total + opportunity.valueCents, 0);
+  const pipeline = useMemo(() => pipelineSummary(dataset, now), [dataset, now]);
+  const tasks = useMemo(() => taskCounts(dataset, now), [dataset, now]);
 
   const blockedCount = brief.sections.find((section) => section.id === 'blocked')?.items.length ?? 0;
   const attentionCount =
@@ -146,9 +147,25 @@ export function MorningBriefPage() {
             <dd className="font-mono text-lg text-ivory tabular-nums">{blockedCount}</dd>
           </div>
           <div>
+            <dt className="label-caps text-faint">Due today</dt>
+            <dd className="font-mono text-lg text-ivory tabular-nums">
+              <Link to="/tasks" className="hover:text-gold">
+                {tasks.dueToday}
+              </Link>
+            </dd>
+          </div>
+          <div>
             <dt className="label-caps text-faint">Open pipeline</dt>
             <dd className="font-mono text-lg text-ivory tabular-nums">
-              {formatCurrencyCents(openPipelineCents)}
+              <Link to="/pipeline" className="hover:text-gold">
+                {formatCurrencyCents(pipeline.openValueCents)}
+              </Link>
+            </dd>
+          </div>
+          <div>
+            <dt className="label-caps text-faint">Expected</dt>
+            <dd className="font-mono text-lg text-gold tabular-nums">
+              {formatCurrencyCents(pipeline.expectedValueCents)}
             </dd>
           </div>
           <div className="min-w-0">
