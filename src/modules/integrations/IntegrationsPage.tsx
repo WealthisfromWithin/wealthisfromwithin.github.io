@@ -105,7 +105,9 @@ export function IntegrationsPage() {
                 health.status === 'operational' ? 'text-sentinel' : 'text-faint',
               )}
             >
-              {health.statement}
+              <Link to="/health" className="hover:text-ivory">
+                {health.statement}
+              </Link>
             </dd>
           </div>
         </dl>
