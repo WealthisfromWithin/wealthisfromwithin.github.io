@@ -49,3 +49,26 @@ Still demo-local; private data, API sync, and Content OS absorption remain ahead
 **Score: 42 / 100** (was 32 after Wave 1)
 
 Attention loop is real: Inbox, Approvals, Health, Brief. Still local-demo; CRM/Content/API ahead.
+
+
+---
+
+## Wave 3 update (Implementer — proposed, pending G3)
+
+**Score: 50 / 100** (was 42 after Wave 2)
+
+Revenue and relationship motion is operable: CRM, Pipeline, Tasks, Projects,
+Calendar, and Meetings, plus three record detail routes. Gains are in *working
+application* (twelve enabled modules), *data integrity* (every displayed figure
+is arithmetic over a stored field, and five new mutations all stamp `touchedAt`),
+*quality gates* (265 tests across 25 files, including component clicks against a
+real IndexedDB), and one point of *auth & security* for extending the href
+allowlist to dynamic record ids.
+
+Caps are unchanged: no auth, no remote persistence, no health probes, no agent
+runtime, no Content OS. Adding modules cannot move those, and this number should
+not be read as progress toward them.
+
+Category subtotals in the Wave 1 table above do not sum to its stated total; the
+per-category breakdown has not been reconciled since Wave 0, so treat the headline
+scores as the authoritative series.

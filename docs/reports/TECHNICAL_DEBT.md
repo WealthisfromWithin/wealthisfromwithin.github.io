@@ -33,7 +33,10 @@ Debt is dominated by **absence of an application**, not by messy application cod
 | TD-19 | Repositories are read-plus-seed; no mutation path | Medium | Wave 2 |
 | TD-20 | Decision events accumulate without a retention rule | Low | Wave 7 |
 | TD-21 | `Operator` is a hard-coded actor on every decision | Low | Wave 7 |
-| TD-22 | No bulk keyboard triage in the inbox or queue | Low | Wave 3–4 |
+| TD-22 | No bulk keyboard triage in the inbox or queue | Low | Wave 4 |
+| TD-23 | Record hrefs validate id shape, not id existence | Low | Wave 7 |
+| TD-24 | Selector modules load eagerly via the href allowlist | Low | Wave 7 |
+| TD-25 | No blocked-reason capture when a task is blocked from the UI | Low | Wave 4 |
 
 ## Interest (cost of waiting)
 
@@ -61,3 +64,15 @@ Every day the poster stays live trains the operator to distrust Substrate health
 | TD-03 | **Held.** Wave 2 added three surfaces and no fake telemetry; health still reports `offline` and the log shows recorded events only. |
 | TD-17 | **Reduced.** Rows the operator acted on carry `touchedAt` and survive the 12-hour reseed, so a demo refresh can no longer reopen a decided gate. Demo timestamps still move. |
 | TD-16 | **Unchanged.** One chunk, now ~534 KB raw / ~163 KB gzip. Route splitting stays queued for Waves 3–4. |
+
+## Wave 3 paydown (`docs/waves/WAVE_3.md`)
+
+| ID | Status after Wave 3 |
+|----|---------------------|
+| TD-16 | **Partly paid.** Every route but the Morning Brief is `React.lazy`: 13 deferred chunks holding 76.77 KB raw / 23.91 KB gzip. Six new modules and three detail pages cost the first load 5.9 KB. The shared chunk (540 KB raw / 168 KB gzip) is React, React Router, Dexie, and Zod, which route splitting cannot move — the 500 KB advisory stands and the remainder is a Wave 7 vendor-chunking and validation-deferral problem. |
+| TD-08 | **Partly paid on this surface.** CRM, pipeline, task, project, and meeting shapes are now defined once in `src/domain/entities.ts` instead of being re-derived from LeadScheduler doctrine. The cross-repo contract itself is still Wave 4–7. |
+| TD-17 | **Held.** `touchedAt` now covers task status, task priority, opportunity stage, and meeting notes, so no Wave 3 mutation can be reseeded away. Demo timestamps still move. |
+| TD-19 | **Held.** Five new writers went through `src/data/mutations.ts` without changing its shape. |
+| TD-20 | **Larger.** Task transitions, stage moves, and meeting notes append to the same unbounded activity log. Demo-sourced rows still clear with the demo; operator-sourced ones still grow. Retention remains Wave 7. |
+| TD-03 | **Held.** Expected value, project progress, relationship temperature, and stall age are arithmetic over stored fields. Nothing on the new surfaces is modelled, predicted, or fabricated. |
+| TD-10 | **Unchanged.** Still no probes; health still reports `offline`. The CRM connectors Wave 3 would want stay `awaiting_credentials`. |
