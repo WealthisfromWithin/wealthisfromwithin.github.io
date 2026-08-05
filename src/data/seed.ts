@@ -1,9 +1,9 @@
 import { integrationCatalog } from '@/integrations/catalog';
-import { DAY_MS, HOUR_MS } from '@/lib/clock';
+import { addDays, DAY_MS, HOUR_MS, startOfWeek } from '@/lib/clock';
 import type { SovereignDataset } from './dataset';
 
 /** Seed contents are versioned so a shape change reseeds the local demo rows. */
-export const SEED_VERSION = 'wave2.0';
+export const SEED_VERSION = 'wave3.0';
 
 const DEMO = 'demo' as const;
 
@@ -17,20 +17,28 @@ function todayAt(now: Date, hour: number, minute = 0): string {
   return date.toISOString();
 }
 
+/** Anchors a demo meeting to a weekday of the operator's current week. */
+function weekdayAt(now: Date, weekdayIndex: number, hour: number, minute = 0): string {
+  const date = addDays(startOfWeek(now), weekdayIndex);
+  date.setHours(hour, minute, 0, 0);
+  return date.toISOString();
+}
+
 /**
  * Demo dataset. Every row carries `source: 'demo'` and the UI badges it.
- * Timestamps are relative to `now` so the Morning Brief stays legible whenever
- * the surface is opened.
+ * Timestamps are relative to `now` so the Morning Brief, the calendar week, and
+ * the pipeline stay legible whenever the surface is opened.
  */
 export function buildDemoDataset(now: Date): SovereignDataset {
   const stamp = now.toISOString();
   const base = { source: DEMO, createdAt: stamp, updatedAt: stamp };
 
   const companies: SovereignDataset['companies'] = [
-    { ...base, id: 'co-truoak', name: 'TruOak Capital', segment: 'Wealth advisory', domain: 'truoak.example' },
-    { ...base, id: 'co-meridian', name: 'Meridian Wealth', segment: 'RIA', domain: 'meridian.example' },
-    { ...base, id: 'co-harbour', name: 'Harbour & Vale', segment: 'Family office', domain: 'harbourvale.example' },
-    { ...base, id: 'co-kestrel', name: 'Kestrel Advisory', segment: 'Boutique planning', domain: 'kestrel.example' },
+    { ...base, id: 'co-truoak', name: 'TruOak Capital', segment: 'Wealth advisory', domain: 'truoak.example', status: 'active' },
+    { ...base, id: 'co-meridian', name: 'Meridian Wealth', segment: 'RIA', domain: 'meridian.example', status: 'prospect' },
+    { ...base, id: 'co-harbour', name: 'Harbour & Vale', segment: 'Family office', domain: 'harbourvale.example', status: 'prospect' },
+    { ...base, id: 'co-kestrel', name: 'Kestrel Advisory', segment: 'Boutique planning', domain: 'kestrel.example', status: 'dormant' },
+    { ...base, id: 'co-vantage', name: 'Vantage Partners', segment: 'Multi-family office', domain: 'vantage.example', status: 'prospect' },
   ];
 
   const people: SovereignDataset['people'] = [
@@ -44,6 +52,7 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       relationshipStrength: 78,
       lastTouchAt: at(now, -3 * DAY_MS),
       tags: ['champion', 'renewal'],
+      notes: 'Decides on retainers alone. Responds to compounding arguments, not discounts.',
     },
     {
       ...base,
@@ -55,6 +64,7 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       relationshipStrength: 54,
       lastTouchAt: at(now, -11 * DAY_MS),
       tags: ['economic-buyer'],
+      notes: 'Holds budget but defers timing to the managing partner.',
     },
     {
       ...base,
@@ -66,6 +76,7 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       relationshipStrength: 66,
       lastTouchAt: at(now, -1 * DAY_MS),
       tags: ['gatekeeper'],
+      notes: 'Every document reaches the principals through her. Keep scope notes short.',
     },
     {
       ...base,
@@ -77,6 +88,19 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       relationshipStrength: 41,
       lastTouchAt: at(now, -26 * DAY_MS),
       tags: ['dormant'],
+      notes: 'Went quiet after the last audit cycle. Re-engage with a result, not a check-in.',
+    },
+    {
+      ...base,
+      id: 'p-lindqvist',
+      name: 'Noor Lindqvist',
+      role: 'Investment Director',
+      companyId: 'co-vantage',
+      email: 'noor@vantage.example',
+      relationshipStrength: 22,
+      lastTouchAt: at(now, -2 * DAY_MS),
+      tags: ['inbound', 'new'],
+      notes: 'Arrived from the compounding essay. No budget conversation yet.',
     },
   ];
 
@@ -111,6 +135,53 @@ export function buildDemoDataset(now: Date): SovereignDataset {
     },
   ];
 
+  const projects: SovereignDataset['projects'] = [
+    {
+      ...base,
+      id: 'prj-truoak-renewal',
+      title: 'TruOak retainer renewal',
+      status: 'active',
+      objective: 'Close the renewal at full rate with the compounding model as the argument.',
+      dueAt: at(now, 9 * DAY_MS),
+      companyId: 'co-truoak',
+      missionId: 'msn-042',
+    },
+    {
+      ...base,
+      id: 'prj-advisory-funnel',
+      title: 'Advisory funnel rebuild',
+      status: 'active',
+      objective: 'One intake path from essay to booked call, measurable at every stage.',
+      dueAt: at(now, 21 * DAY_MS),
+      missionId: 'msn-042',
+    },
+    {
+      ...base,
+      id: 'prj-publishing-substrate',
+      title: 'Publishing substrate',
+      status: 'blocked',
+      objective: 'Approve once, publish to three channels, record what happened.',
+      missionId: 'msn-043',
+      blockedReason: 'n8n has no credentials on this surface, so the loop cannot run.',
+    },
+    {
+      ...base,
+      id: 'prj-decision-memory',
+      title: 'Decision memory',
+      status: 'planning',
+      objective: 'Record every consequential decision with its rationale and reversal cost.',
+      missionId: 'msn-044',
+    },
+    {
+      ...base,
+      id: 'prj-kestrel-audit',
+      title: 'Kestrel operations audit',
+      status: 'paused',
+      objective: 'Finish the deferred audit if Kestrel re-engages.',
+      companyId: 'co-kestrel',
+    },
+  ];
+
   const tasks: SovereignDataset['tasks'] = [
     {
       ...base,
@@ -120,6 +191,9 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       priority: 'critical',
       dueAt: todayAt(now, 11),
       missionId: 'msn-042',
+      projectId: 'prj-truoak-renewal',
+      personId: 'p-aldridge',
+      opportunityId: 'opp-truoak',
       estimateMinutes: 45,
       context: 'Dana asked for the compounding model before her partner meeting.',
     },
@@ -131,6 +205,9 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       priority: 'high',
       dueAt: todayAt(now, 15),
       missionId: 'msn-042',
+      projectId: 'prj-advisory-funnel',
+      personId: 'p-okafor',
+      opportunityId: 'opp-meridian',
       estimateMinutes: 30,
       context: 'Second call. Needs the pipeline-stage doctrine one-pager.',
     },
@@ -144,6 +221,7 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       blockedReason: 'Waiting on n8n credentials — integration is Awaiting Credentials.',
       blockedSince: at(now, -6 * DAY_MS),
       missionId: 'msn-043',
+      projectId: 'prj-publishing-substrate',
       context: 'Blocked at the integration boundary, not the code.',
     },
     {
@@ -155,6 +233,7 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       blockedReason: 'Awaiting architecture gate G3 before Wave 5 scope opens.',
       blockedSince: at(now, -2 * DAY_MS),
       missionId: 'msn-044',
+      projectId: 'prj-decision-memory',
       context: 'Do not start before the gate.',
     },
     {
@@ -164,6 +243,8 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       status: 'todo',
       priority: 'high',
       dueAt: todayAt(now, 17),
+      personId: 'p-rhodes',
+      opportunityId: 'opp-harbour',
       estimateMinutes: 20,
       context: 'Priya expects a scope note today.',
     },
@@ -174,6 +255,7 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       status: 'todo',
       priority: 'normal',
       dueAt: at(now, -2 * DAY_MS),
+      projectId: 'prj-advisory-funnel',
       estimateMinutes: 60,
       context: 'Overdue. Blocking the learning cycle report.',
     },
@@ -184,8 +266,37 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       status: 'todo',
       priority: 'low',
       dueAt: at(now, 5 * DAY_MS),
+      projectId: 'prj-kestrel-audit',
+      personId: 'p-santos',
+      opportunityId: 'opp-kestrel',
       estimateMinutes: 15,
       context: 'Dormant 26 days.',
+    },
+    {
+      ...base,
+      id: 't-vantage-brief',
+      title: 'Brief Vantage on the advisory model',
+      status: 'todo',
+      priority: 'normal',
+      dueAt: at(now, 2 * DAY_MS),
+      projectId: 'prj-advisory-funnel',
+      personId: 'p-lindqvist',
+      opportunityId: 'opp-vantage',
+      estimateMinutes: 25,
+      context: 'Inbound from the compounding essay. Qualify before scheduling.',
+    },
+    {
+      ...base,
+      id: 't-truoak-pricing',
+      title: 'Rebuild the renewal pricing rationale',
+      status: 'in_progress',
+      priority: 'high',
+      dueAt: at(now, 3 * DAY_MS),
+      projectId: 'prj-truoak-renewal',
+      personId: 'p-aldridge',
+      opportunityId: 'opp-truoak',
+      estimateMinutes: 90,
+      context: 'Dana asked for the rationale unprompted, which is the buying signal.',
     },
     {
       ...base,
@@ -194,7 +305,98 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       status: 'done',
       priority: 'high',
       missionId: 'msn-042',
+      projectId: 'prj-advisory-funnel',
+      completedAt: at(now, -20 * HOUR_MS),
       context: 'Wave 1 scaffold.',
+    },
+    {
+      ...base,
+      id: 't-attention-os',
+      title: 'Ship the attention surfaces',
+      status: 'done',
+      priority: 'high',
+      projectId: 'prj-advisory-funnel',
+      completedAt: at(now, -30 * HOUR_MS),
+      context: 'Wave 2: inbox, approvals, health.',
+    },
+  ];
+
+  const meetings: SovereignDataset['meetings'] = [
+    {
+      ...base,
+      id: 'mtg-internal-review',
+      title: 'Weekly operating review',
+      startsAt: weekdayAt(now, 0, 9),
+      endsAt: weekdayAt(now, 0, 9, 45),
+      kind: 'internal',
+      personIds: [],
+      location: 'Desk',
+      notes: 'Agreed the week is renewal-first. Publishing substrate stays blocked, not retried.',
+    },
+    {
+      ...base,
+      id: 'mtg-truoak-renewal',
+      title: 'TruOak renewal working session',
+      startsAt: weekdayAt(now, 1, 11, 30),
+      endsAt: weekdayAt(now, 1, 12, 15),
+      kind: 'review',
+      personIds: ['p-aldridge'],
+      companyId: 'co-truoak',
+      opportunityId: 'opp-truoak',
+      location: 'Zoom',
+      notes: 'Dana wants the pricing rationale in writing before her partner meeting.',
+    },
+    {
+      ...base,
+      id: 'mtg-meridian-discovery',
+      title: 'Meridian discovery call two',
+      startsAt: weekdayAt(now, 2, 15),
+      endsAt: weekdayAt(now, 2, 15, 45),
+      kind: 'discovery',
+      personIds: ['p-okafor'],
+      companyId: 'co-meridian',
+      opportunityId: 'opp-meridian',
+      location: 'Google Meet',
+      notes: '',
+    },
+    {
+      ...base,
+      id: 'mtg-harbour-scope',
+      title: 'Harbour & Vale scope walkthrough',
+      startsAt: weekdayAt(now, 3, 10),
+      endsAt: weekdayAt(now, 3, 11),
+      kind: 'proposal',
+      personIds: ['p-rhodes'],
+      companyId: 'co-harbour',
+      opportunityId: 'opp-harbour',
+      location: 'Harbour offices',
+      notes: '',
+    },
+    {
+      ...base,
+      id: 'mtg-vantage-intro',
+      title: 'Vantage Partners introduction',
+      startsAt: weekdayAt(now, 4, 13),
+      endsAt: weekdayAt(now, 4, 13, 30),
+      kind: 'discovery',
+      personIds: ['p-lindqvist'],
+      companyId: 'co-vantage',
+      opportunityId: 'opp-vantage',
+      location: 'Zoom',
+      notes: '',
+    },
+    {
+      ...base,
+      id: 'mtg-kestrel-checkin',
+      title: 'Kestrel audit check-in',
+      startsAt: at(now, -9 * DAY_MS),
+      endsAt: at(now, -9 * DAY_MS + 30 * 60_000),
+      kind: 'follow_up',
+      personIds: ['p-santos'],
+      companyId: 'co-kestrel',
+      opportunityId: 'opp-kestrel',
+      location: 'Phone',
+      notes: 'Iris deferred the audit to next quarter. No budget owner named. Treat as dormant.',
     },
   ];
 
@@ -263,48 +465,99 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       id: 'opp-truoak',
       name: 'TruOak advisory retainer renewal',
       companyId: 'co-truoak',
+      personId: 'p-aldridge',
       stage: 'negotiation',
       valueCents: 4_800_000,
       probability: 72,
       nextStep: 'Send renewal framing memo',
       nextStepAt: todayAt(now, 11),
       signal: 'Champion asked for pricing rationale unprompted.',
+      leadSource: 'Existing client',
+      stageChangedAt: at(now, -4 * DAY_MS),
     },
     {
       ...base,
       id: 'opp-meridian',
       name: 'Meridian growth engagement',
       companyId: 'co-meridian',
+      personId: 'p-okafor',
       stage: 'qualified',
       valueCents: 3_200_000,
       probability: 45,
       nextStep: 'Discovery call two',
       nextStepAt: todayAt(now, 15),
       signal: 'Opened the pipeline doctrine three times this week.',
+      leadSource: 'Referral · TruOak',
+      stageChangedAt: at(now, -8 * DAY_MS),
     },
     {
       ...base,
       id: 'opp-harbour',
       name: 'Harbour & Vale content system',
       companyId: 'co-harbour',
+      personId: 'p-rhodes',
       stage: 'proposal',
       valueCents: 2_100_000,
       probability: 55,
       nextStep: 'Scope note',
       nextStepAt: todayAt(now, 17),
       signal: 'Chief of staff forwarded the proposal internally.',
+      leadSource: 'Inbound · essay',
+      stageChangedAt: at(now, -6 * DAY_MS),
     },
     {
       ...base,
       id: 'opp-kestrel',
       name: 'Kestrel operations audit',
       companyId: 'co-kestrel',
+      personId: 'p-santos',
       stage: 'engaged',
       valueCents: 900_000,
       probability: 20,
       nextStep: 'Re-engagement note',
       nextStepAt: at(now, 5 * DAY_MS),
       signal: 'Dormant since the last audit cycle.',
+      leadSource: 'Outbound',
+      stageChangedAt: at(now, -34 * DAY_MS),
+    },
+    {
+      ...base,
+      id: 'opp-vantage',
+      name: 'Vantage advisory pilot',
+      companyId: 'co-vantage',
+      personId: 'p-lindqvist',
+      stage: 'contacted',
+      valueCents: 1_400_000,
+      probability: 15,
+      nextStep: 'Qualify on the introduction call',
+      nextStepAt: at(now, 2 * DAY_MS),
+      signal: 'Inbound from the compounding essay two days ago.',
+      leadSource: 'Inbound · essay',
+      stageChangedAt: at(now, -2 * DAY_MS),
+    },
+    {
+      ...base,
+      id: 'opp-ridgeline',
+      name: 'Ridgeline planning retainer',
+      stage: 'won',
+      valueCents: 2_600_000,
+      probability: 100,
+      nextStep: '',
+      signal: 'Closed on the second call. Referral from an essay reader.',
+      leadSource: 'Referral',
+      stageChangedAt: at(now, -18 * DAY_MS),
+    },
+    {
+      ...base,
+      id: 'opp-castlepoint',
+      name: 'Castlepoint discretionary mandate',
+      stage: 'lost',
+      valueCents: 5_400_000,
+      probability: 0,
+      nextStep: '',
+      signal: 'Lost to an incumbent with a compliance relationship.',
+      leadSource: 'Outbound',
+      stageChangedAt: at(now, -25 * DAY_MS),
     },
   ];
 
@@ -361,6 +614,7 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       severity: 'info',
       read: false,
       origin: 'Pipeline',
+      href: '/pipeline/opportunity/opp-truoak',
     },
     {
       ...base,
@@ -390,6 +644,7 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       severity: 'info',
       read: false,
       origin: 'Relationship watch',
+      href: '/crm/person/p-santos',
     },
     {
       ...base,
@@ -446,6 +701,14 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       title: 'Harbour & Vale forwarded the proposal internally',
       detail: 'Three new readers on the document.',
       channel: 'pipeline',
+    },
+    {
+      ...base,
+      id: 'e-vantage-inbound',
+      at: at(now, -16 * HOUR_MS),
+      title: 'Vantage Partners arrived from the compounding essay',
+      detail: 'Inbound enquiry recorded against a new contact.',
+      channel: 'relationship',
     },
     {
       ...base,
@@ -526,7 +789,9 @@ export function buildDemoDataset(now: Date): SovereignDataset {
     companies,
     people,
     missions,
+    projects,
     tasks,
+    meetings,
     approvals,
     opportunities,
     contentItems,

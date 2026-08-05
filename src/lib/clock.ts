@@ -30,6 +30,35 @@ export function isSameDay(a: Date, b: Date): boolean {
   return startOfDay(a).getTime() === startOfDay(b).getTime();
 }
 
+export function addDays(date: Date, days: number): Date {
+  const copy = new Date(date);
+  copy.setDate(copy.getDate() + days);
+  return copy;
+}
+
+/** Monday-based: an operator week starts with work, not with a weekend. */
+export function startOfWeek(date: Date): Date {
+  const copy = startOfDay(date);
+  const offset = (copy.getDay() + 6) % 7;
+  return addDays(copy, -offset);
+}
+
+export function endOfWeek(date: Date): Date {
+  return endOfDay(addDays(startOfWeek(date), 6));
+}
+
+/** Local calendar date, so an agenda day is the operator's day, not UTC's. */
+export function dateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${String(year)}-${month}-${day}`;
+}
+
+export function formatDayLabel(date: Date): string {
+  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
 export function relativeTime(iso: string, now: Date): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return '—';

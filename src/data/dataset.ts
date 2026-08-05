@@ -5,10 +5,12 @@ import type {
   ContentItem,
   Integration,
   LeverageMetric,
+  Meeting,
   Mission,
   Notification,
   Opportunity,
   Person,
+  Project,
   Task,
 } from '@/domain';
 
@@ -17,6 +19,8 @@ export interface SovereignDataset {
   people: Person[];
   companies: Company[];
   tasks: Task[];
+  projects: Project[];
+  meetings: Meeting[];
   missions: Mission[];
   approvals: Approval[];
   opportunities: Opportunity[];
@@ -31,6 +35,8 @@ export const DATASET_KEYS = [
   'people',
   'companies',
   'tasks',
+  'projects',
+  'meetings',
   'missions',
   'approvals',
   'opportunities',
@@ -45,6 +51,8 @@ export const emptyDataset: SovereignDataset = {
   people: [],
   companies: [],
   tasks: [],
+  projects: [],
+  meetings: [],
   missions: [],
   approvals: [],
   opportunities: [],

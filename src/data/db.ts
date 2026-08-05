@@ -6,10 +6,12 @@ import type {
   ContentItem,
   Integration,
   LeverageMetric,
+  Meeting,
   Mission,
   Notification,
   Opportunity,
   Person,
+  Project,
   Task,
 } from '@/domain';
 
@@ -22,6 +24,8 @@ export class SovereignDb extends Dexie {
   people!: EntityTable<Person, 'id'>;
   companies!: EntityTable<Company, 'id'>;
   tasks!: EntityTable<Task, 'id'>;
+  projects!: EntityTable<Project, 'id'>;
+  meetings!: EntityTable<Meeting, 'id'>;
   missions!: EntityTable<Mission, 'id'>;
   approvals!: EntityTable<Approval, 'id'>;
   opportunities!: EntityTable<Opportunity, 'id'>;
@@ -59,6 +63,26 @@ export class SovereignDb extends Dexie {
           .toCollection()
           .modify((row) => {
             row.status ??= 'pending';
+          });
+      });
+
+    // Wave 3 adds execution and time tables and the local joins that let a task,
+    // an opportunity, and a meeting point at each other. Version-2 companies
+    // predate the lifecycle column and are backfilled as prospects.
+    this.version(3)
+      .stores({
+        companies: 'id, name, status, source',
+        tasks: 'id, status, priority, dueAt, missionId, projectId, opportunityId, personId, source',
+        projects: 'id, status, dueAt, companyId, source',
+        meetings: 'id, startsAt, companyId, opportunityId, source',
+        opportunities: 'id, stage, nextStepAt, companyId, personId, source',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table<Partial<Company>, string>('companies')
+          .toCollection()
+          .modify((row) => {
+            row.status ??= 'prospect';
           });
       });
   }

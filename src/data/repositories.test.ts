@@ -101,6 +101,7 @@ describe('durable demo opt-out (M1)', () => {
       id: 'co-operator',
       name: 'Operator Holdings',
       segment: 'Operator-owned',
+      status: 'active',
       source: 'local',
       createdAt: stamp,
       updatedAt: stamp,
