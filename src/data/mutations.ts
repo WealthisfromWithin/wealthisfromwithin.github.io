@@ -134,7 +134,9 @@ const taskStatusVerb: Record<TaskStatus, string> = {
 /**
  * Moves a task and records the movement. `completedAt` is set only by reaching
  * `done` and cleared on the way out, so a reopened task does not keep a
- * completion date it no longer has.
+ * completion date it no longer has. `blockedSince` and `blockedReason` are set
+ * only while `blocked` and cleared on the way out, so a task that has moved on
+ * does not keep showing a stale blocker.
  */
 export async function setTaskStatus(
   id: string,
@@ -154,6 +156,7 @@ export async function setTaskStatus(
       completedAt: status === 'done' ? stamp : undefined,
       // A task that is no longer blocked has no blocking reason to show.
       blockedSince: status === 'blocked' ? (task.blockedSince ?? stamp) : undefined,
+      blockedReason: status === 'blocked' ? task.blockedReason : undefined,
     });
     await database.events.put(
       activityFor(

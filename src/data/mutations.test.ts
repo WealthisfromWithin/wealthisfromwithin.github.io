@@ -224,9 +224,15 @@ describe('task status', () => {
     expect(task?.completedAt).toBeUndefined();
   });
 
-  it('clears the blocked stamp when the task starts moving again', async () => {
+  it('clears the blocked stamp and reason when the task starts moving again', async () => {
+    const before = await database.tasks.get('t-publish-loop');
+    expect(before?.blockedReason).toBeDefined();
+
     expect(await setTaskStatus('t-publish-loop', 'in_progress', database)).toBe(true);
-    expect((await database.tasks.get('t-publish-loop'))?.blockedSince).toBeUndefined();
+
+    const after = await database.tasks.get('t-publish-loop');
+    expect(after?.blockedSince).toBeUndefined();
+    expect(after?.blockedReason).toBeUndefined();
   });
 
   it('reports no change for an unknown id or a repeated status', async () => {

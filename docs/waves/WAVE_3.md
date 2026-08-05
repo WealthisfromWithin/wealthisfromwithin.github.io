@@ -84,7 +84,8 @@ nine days back that carries real notes and one that does not.
 `src/data/mutations.ts` remains the only write path. Wave 3 adds:
 
 - `setTaskStatus(id, status)` — stamps `completedAt` on done, clears it on
-  reopen, clears `blockedSince` when work restarts, records an `execution` event
+  reopen, clears `blockedSince` and `blockedReason` when work restarts,
+  records an `execution` event
 - `setTaskPriority(id, priority)`
 - `createTask({ title, ... })` — operator-owned (`source: 'local'`), so no
   reseed touches it
