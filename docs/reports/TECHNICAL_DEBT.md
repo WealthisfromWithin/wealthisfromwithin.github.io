@@ -43,6 +43,10 @@ Debt is dominated by **absence of an application**, not by messy application cod
 | TD-29 | Memory review dates decay on one fixed interval for every kind | Low | Wave 6 |
 | TD-30 | Agent session history is sent whole, with no length bound | Low | Wave 6 |
 | TD-31 | Knowledge backlinks are computed by scanning every node | Low | Wave 7 |
+| TD-32 | Automation triggers are evaluated by scanning whole tables per rule | Low | Wave 7 |
+| TD-33 | A gated run stores no snapshot of the effect it deferred | Low | Wave 7 |
+| TD-34 | Declared and counted mission progress diverge with nothing recording why | Low | Wave 7 |
+| TD-35 | Window and median arithmetic is duplicated across analytics and metrics | Low | Wave 7 |
 
 ## Interest (cost of waiting)
 
@@ -113,3 +117,23 @@ Every day the poster stays live trains the operator to distrust Substrate health
 | TD-24 | **Larger.** The href allowlist now reads filter constants from six more selector modules, pulling more selector code into the shared chunk. Same Wave 7 fix. |
 | TD-27 | **Unpaid.** Nominally due this wave; nothing in Wave 5 touched content readings. Moves with the metric entry form. |
 | TD-10 | **Unchanged.** No probes. The local adapter's `/api/tags` check is an adapter-level probe of the operator's own machine, not a Health Monitor probe, and Health still projects registry state. |
+
+## Wave 6 paydown (`docs/waves/WAVE_6.md`)
+
+| ID | Status after Wave 6 |
+|----|---------------------|
+| TD-15 | **Partly paid, further.** Named agents with roles are still absent, but the mechanism one would be handed now exists: declared triggers, declared actions, readiness derived from the registry, a gate shared with the human queue, and a run log that records refusals and empty runs as outcomes. The remaining gap is identity and authority, not machinery. |
+| TD-07 | **Held, and better stated.** The MCP panel names the Command API as the only place an MCP token could live, and neither registry surface holds a credential, an endpoint, or a field to type one into. |
+| TD-16 | **Held, larger.** Seven new page chunks keep 54.5 KB out of the first load, which nonetheless grew to 692.18 KB raw across 40 deferred chunks. Vendor chunking (Wave 7) still owns the advisory. |
+| TD-17 | **Held.** All eight Wave 6 writers stamp `touchedAt`: a defined rule, an enabled or archived rule, an opened objective, a status move, and a declared progress figure all survive the 12-hour reseed. |
+| TD-19 | **Held.** Eight new writers in the same module, keeping the `{ ok, reason }` result shape. |
+| TD-20 | **Larger, in two ways.** Automation runs append to the same unbounded activity log, and `automationRuns` is itself a second unbounded table that grows every time a rule is asked to run. Retention remains Wave 7 and now has two tables to cover. |
+| TD-03 | **Held.** Every KPI and loop reading carries its basis and sample size, refuses when the denominator is zero, and warns under five rows. Metric rows recorded as figures are quarantined in a "Declared metrics" group so a typed number is never read as a counted one. |
+| TD-21 | **Held, and more visible.** `invokedBy` on every run is the same hard-coded `Operator`. A run log with one possible actor is the second surface where the actor genuinely matters. |
+| TD-23 | **Held.** `automationHref` and `missionHref` validate id shape, not existence; a link to a cleared row lands on "Not in the local store". |
+| TD-24 | **Larger.** The href allowlist now reads filter constants from the automations, missions, analytics, and metrics selectors plus the integration category list, pulling more selector code into the shared chunk. Same Wave 7 fix. |
+| TD-26 | **Unpaid.** Nominally due this wave. No automation touches the compliance policy, and versioning it against what it checked is still coupled to the content approval path. |
+| TD-27 | **Unpaid.** Content readings are still assumed cumulative. `/metrics` and `/analytics` read them and both state they were entered by hand or seeded, which makes the assumption visible without fixing it. |
+| TD-28 | **Partly paid.** The MCP sub-route gets the same tab strip the Content OS has, so a nested surface is reachable and legible from its module. The sidebar still highlights only the module. |
+| TD-05 / TD-29 / TD-30 / TD-31 | **Held.** Untouched by this wave. |
+| TD-10 | **Unchanged.** Still no probes, and now stated per row: every connector and every MCP server prints *never probed*. |

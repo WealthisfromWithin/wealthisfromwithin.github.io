@@ -4,16 +4,17 @@ HermesBrain Sovereign Mission Command — the operating system for the business.
 
 ## Status
 
-**Waves 1–4** are complete and gated: the foundation shell, the Attention OS,
-Revenue & Relationships, and the Content Operating System. **Wave 5 —
-Cognition: complete, awaiting review.** Knowledge, Memory, Documents,
-Decisions, Research, Prompts, and the AI Workspace are routed, and every model
-call goes through the Agent Kernel. Four hosted provider adapters report
-Awaiting Credentials and refuse; the local adapter runs only when the operator
-points `VITE_LOCAL_AI_URL` at a runtime on their own machine. Nothing publishes
-and nothing generates from this bundle, and the surfaces say so rather than
-implying otherwise. Health is still projected from the Integration Registry; no
-probe has run.
+**Waves 1–5** are complete and gated: the foundation shell, the Attention OS,
+Revenue & Relationships, the Content Operating System, and Cognition. **Wave 6 —
+Leverage Fabric: complete, awaiting review.** Automations, Mission Control,
+Business Metrics, and Analytics are routed, and the Integration Registry gained an
+MCP panel. A rule can write a signal, open a gate, or record that it ran, and
+nothing else: there is no scheduler in this bundle, so a run happens when the
+operator asks and the log records who asked, and the hand-off action that would
+reach an external system always refuses. No MCP server is Connected, because
+Connected means a verified probe and nothing here opens a transport. Nothing
+publishes and nothing generates from this bundle, and the surfaces say so rather
+than implying otherwise.
 
 ## Run it
 
@@ -44,6 +45,10 @@ Requires Node 22+ and pnpm 10+.
 | `/calendar` | Calendar | One week of meetings and due work |
 | `/meetings` | Meetings | Meeting records with an inline notes editor |
 | `/content` | Content OS | Production queue, plus `ideas`, `calendar`, `campaigns`, `library`, `analytics`, and `item/:id` |
+| `/missions` | Mission Control | Objectives with declared and counted progress side by side, plus `mission/:id` |
+| `/automations` | Automations | Local rules with approval gates and a run log, plus `rule/:id`. No scheduler, no publishing |
+| `/metrics` | Business Metrics | KPIs counted from the local domain, each with its basis and sample size |
+| `/analytics` | Analytics | Activity, throughput, and provenance of the local store. Nothing observes the operator |
 | `/decisions` | Decision Log | Calls with their rationale and a transition table, plus `entry/:id` |
 | `/knowledge` | Knowledge | Notes, insights, playbooks, and questions with local joins, plus `node/:id` |
 | `/memory` | Memory | Durable facts, preferences, and constraints with review dates and provenance |
@@ -51,13 +56,13 @@ Requires Node 22+ and pnpm 10+.
 | `/research` | Research | Open questions and findings recorded by hand. No crawler, no search connector |
 | `/ai` | AI Workspace | Sessions through the Agent Kernel. Refusals are recorded as refusals |
 | `/prompts` | Prompt Library | Reusable instructions, browsable and editable with no provider configured |
-| `/integrations` | Integration Registry | 27 connectors: Connected, Disabled, or Awaiting Credentials |
+| `/integrations` | Integration Registry | 29 connectors: Connected, Disabled, or Awaiting Credentials, plus `mcp` |
 | `/settings` | Settings | Local store controls, credential reality, kernel status, roadmap |
 
 `⌘K` / `Ctrl+K` opens the command palette. `/` opens global search.
 
-Five further modules are registered but have no route and never appear in
-navigation. See `docs/waves/WAVE_5.md`.
+One further module — Command API Sync — is registered but has no route and never
+appears in navigation. See `docs/waves/WAVE_6.md`.
 
 ### Optional local model
 
@@ -80,7 +85,7 @@ machine, so it only calls hosts where that is true.
 1. [`ARCHITECTURE_AUDIT.md`](./ARCHITECTURE_AUDIT.md) — repository intelligence & recommended architecture
 2. [`docs/MODEL_WORKFLOW.md`](./docs/MODEL_WORKFLOW.md) — Grok / Claude / GPT ownership rules
 3. [`docs/IMPLEMENTATION_PLAN.md`](./docs/IMPLEMENTATION_PLAN.md) — Wave 1 brief
-   (Waves 2–5 have their own `IMPLEMENTATION_PLAN_WAVE_*.md`)
+   (Waves 2–6 have their own `IMPLEMENTATION_PLAN_WAVE_*.md`)
 4. [`docs/waves/`](./docs/waves/) — what each wave delivered, deferred, and deviated on
 5. [`docs/reviews/`](./docs/reviews/) — G2 reviews and G3 alignment gates
 6. [`docs/reports/`](./docs/reports/) — debt, integrations, security, performance, matrix, roadmap
