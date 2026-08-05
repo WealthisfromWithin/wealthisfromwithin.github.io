@@ -153,7 +153,7 @@ export function searchDocuments(
     query,
     documents,
     (document) => [document.title, document.subtitle, document.keywords.join(' ')],
-    limit,
+    { limit, minScore: 0 },
   );
 }
 

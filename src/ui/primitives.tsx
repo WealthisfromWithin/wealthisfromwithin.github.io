@@ -54,7 +54,7 @@ export function StatePill({
     <span
       title={title}
       className={cn(
-        'label-caps inline-flex items-center gap-1.5 border px-2 py-0.5',
+        'label-caps inline-flex items-center gap-1.5 border px-2 py-0.5 whitespace-nowrap',
         toneBorder[tone],
         toneText[tone],
       )}

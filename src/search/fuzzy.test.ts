@@ -30,6 +30,15 @@ describe('fuzzyMatch', () => {
     const ranked = rankByFuzzy('settings', ['Settings', 'Set target', 'Mission settings log'], (v) => [v]);
     expect(ranked[0]?.item).toBe('Settings');
   });
+
+  it('drops scattered noise below the score floor', () => {
+    const scattered = 'x a x l x d x r x i x d x g x e x';
+    const match = fuzzyMatch('aldridge', scattered);
+    expect(match).not.toBeNull();
+    expect(match?.score ?? 0).toBeLessThan(12);
+    expect(rankByFuzzy('aldridge', [scattered], (value) => [value], { minScore: 12 })).toEqual([]);
+    expect(rankByFuzzy('aldridge', ['Dana Aldridge'], (value) => [value], { minScore: 12 })).toHaveLength(1);
+  });
 });
 
 describe('searchDocuments', () => {

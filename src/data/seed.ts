@@ -328,16 +328,6 @@ export function buildDemoDataset(now: Date): SovereignDataset {
     },
     {
       ...base,
-      id: 'n-credentials',
-      title: '20 integrations are awaiting credentials',
-      body: 'No substrate connection is verified from the Command Surface.',
-      severity: 'warning',
-      read: false,
-      origin: 'Integration registry',
-      href: '/integrations',
-    },
-    {
-      ...base,
       id: 'n-truoak',
       title: 'TruOak opened the renewal memo twice',
       body: 'Buying signal on a $48k negotiation.',

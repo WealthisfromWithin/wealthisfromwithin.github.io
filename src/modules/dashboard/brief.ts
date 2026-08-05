@@ -119,15 +119,14 @@ function opportunitySection(dataset: SovereignDataset): BriefItem[] {
     .map((opportunity) => ({
       id: `opportunity:${opportunity.id}`,
       title: opportunity.name,
-      detail: opportunity.signal,
-      meta: [
-        formatCurrencyCents(opportunity.valueCents),
-        `${String(opportunity.probability)}%`,
-        opportunity.companyId ? (companies.get(opportunity.companyId) ?? '') : '',
+      detail: [
+        opportunity.companyId ? companies.get(opportunity.companyId) : undefined,
         opportunity.stage,
+        opportunity.signal,
       ]
         .filter(Boolean)
         .join(' · '),
+      meta: `${formatCurrencyCents(opportunity.valueCents)} · ${String(opportunity.probability)}%`,
       tone: opportunity.probability >= 60 ? 'info' : 'neutral',
       demo: isDemo(opportunity.source),
     }));

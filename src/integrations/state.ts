@@ -1,4 +1,15 @@
-import type { Integration, IntegrationState } from '@/domain';
+import type { Integration, IntegrationCategory, IntegrationState } from '@/domain';
+
+export const integrationCategoryLabel: Record<IntegrationCategory, string> = {
+  ai: 'AI',
+  automation: 'Automation',
+  communication: 'Communication',
+  crm: 'CRM',
+  data: 'Data',
+  productivity: 'Productivity',
+  publishing: 'Publishing',
+  mcp: 'MCP',
+};
 
 export const INTEGRATION_STATES: readonly IntegrationState[] = [
   'connected',

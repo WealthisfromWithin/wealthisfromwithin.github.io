@@ -5,9 +5,12 @@ export interface FuzzyMatch {
 }
 
 const EXACT_PREFIX_BONUS = 40;
-const WORD_START_BONUS = 12;
-const CONSECUTIVE_BONUS = 6;
-const GAP_PENALTY = 1;
+const WORD_START_BONUS = 8;
+const CONSECUTIVE_BONUS = 10;
+/** Charged once per break in a run, so matches smeared across a sentence lose. */
+const BREAK_PENALTY = 6;
+const DISTANCE_PENALTY = 1;
+const MAX_DISTANCE_CHARGED = 12;
 
 /**
  * Subsequence matcher tuned for command palettes: every query character must
@@ -24,16 +27,18 @@ export function fuzzyMatch(query: string, haystack: string): FuzzyMatch | null {
   const indices: number[] = [];
   let score = 0;
   let cursor = 0;
-  let previousIndex = -2;
+  let previousIndex = -1;
+  let position = 0;
 
   for (const char of needle) {
     const found = target.indexOf(char, cursor);
     if (found === -1) return null;
 
-    if (found === previousIndex + 1) {
+    if (position > 0 && found === previousIndex + 1) {
       score += CONSECUTIVE_BONUS;
     } else {
-      score -= Math.min((found - cursor) * GAP_PENALTY, 10);
+      if (position > 0) score -= BREAK_PENALTY;
+      score -= Math.min(found - cursor, MAX_DISTANCE_CHARGED) * DISTANCE_PENALTY;
     }
 
     const previousChar = found > 0 ? target[found - 1] : undefined;
@@ -44,6 +49,7 @@ export function fuzzyMatch(query: string, haystack: string): FuzzyMatch | null {
     indices.push(found);
     previousIndex = found;
     cursor = found + 1;
+    position += 1;
   }
 
   if (target.startsWith(needle)) score += EXACT_PREFIX_BONUS;
@@ -58,12 +64,23 @@ export interface RankedResult<T> {
   score: number;
 }
 
+export interface RankOptions {
+  limit?: number;
+  /**
+   * Score floor. A subsequence match can be technically true but useless
+   * ("aldridge" scattered through an unrelated sentence); a floor keeps that
+   * noise out of the palette.
+   */
+  minScore?: number;
+}
+
 export function rankByFuzzy<T>(
   query: string,
   items: readonly T[],
   fields: (item: T) => string[],
-  limit = 20,
+  options: RankOptions = {},
 ): RankedResult<T>[] {
+  const { limit = 20, minScore = Number.NEGATIVE_INFINITY } = options;
   const ranked: RankedResult<T>[] = [];
 
   for (const item of items) {
@@ -78,7 +95,7 @@ export function rankByFuzzy<T>(
       }
       weight += 1;
     }
-    if (best !== null) ranked.push({ item, score: best });
+    if (best !== null && best >= minScore) ranked.push({ item, score: best });
   }
 
   return ranked.sort((a, b) => b.score - a.score).slice(0, limit);

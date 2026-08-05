@@ -62,7 +62,7 @@ function PaletteDialog() {
             query,
             commands,
             (command) => [command.label, command.hint, command.keywords.join(' ')],
-            10,
+            { limit: 10, minScore: 12 },
           ).map(({ item }) => item);
 
     const commandRows: Row[] = matched.map((command) => ({
@@ -123,7 +123,7 @@ function PaletteDialog() {
         role="dialog"
         aria-modal="true"
         aria-label={mode === 'search' ? 'Global search' : 'Command palette'}
-        className="glass w-full max-w-2xl border border-line-strong shadow-2xl"
+        className="w-full max-w-2xl border border-line-strong bg-surface/95 shadow-2xl backdrop-blur-md"
         onKeyDown={onKeyDown}
       >
         <div className="flex items-center gap-3 border-b border-line px-4">

@@ -6,10 +6,10 @@ import {
   countByState,
   deriveSubstrateHealth,
   INTEGRATION_STATES,
+  integrationCategoryLabel,
   integrationStateMeta,
   stateFilterLabel,
 } from '@/integrations/state';
-import { titleCase } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { SectionLabel, StatePill } from '@/ui/primitives';
 
@@ -45,7 +45,9 @@ function IntegrationRow({ integration }: { integration: Integration }) {
           {meta.label}
         </StatePill>
       </td>
-      <td className="py-2.5 pr-4 text-xs text-faint">{titleCase(integration.category)}</td>
+      <td className="py-2.5 pr-4 text-xs text-faint">
+        {integrationCategoryLabel[integration.category]}
+      </td>
       <td className="py-2.5 font-mono text-[0.65rem] text-faint">
         {integration.capabilities.length > 0 ? integration.capabilities.join(' · ') : '—'}
       </td>

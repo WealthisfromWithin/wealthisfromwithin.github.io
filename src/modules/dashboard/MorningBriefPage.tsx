@@ -19,12 +19,12 @@ function BriefRow({ item }: { item: BriefItem }) {
     <>
       <span
         className={cn(
-          'relative flex-1 pl-3 before:absolute before:top-1 before:bottom-1 before:left-0 before:w-px',
+          'relative min-w-0 flex-1 pl-3 before:absolute before:top-1 before:bottom-1 before:left-0 before:w-px',
           toneAccent[item.tone],
         )}
       >
-        <span className="flex items-center gap-2">
-          <span className="truncate text-sm text-ivory">{item.title}</span>
+        <span className="flex min-w-0 items-baseline gap-2">
+          <span className="min-w-0 flex-1 text-sm text-ivory">{item.title}</span>
           {item.demo ? <DemoBadge /> : null}
         </span>
         {item.detail ? (
@@ -32,7 +32,7 @@ function BriefRow({ item }: { item: BriefItem }) {
         ) : null}
       </span>
       {item.meta ? (
-        <span className="shrink-0 pt-0.5 font-mono text-[0.65rem] text-faint tabular-nums">
+        <span className="w-32 shrink-0 pt-0.5 text-right font-mono text-[0.65rem] leading-4 text-faint tabular-nums">
           {item.meta}
         </span>
       ) : null}

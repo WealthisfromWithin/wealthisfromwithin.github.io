@@ -23,11 +23,3 @@ export function formatMetricValue(value: number, unit: 'hours' | 'usd' | 'count'
       return value.toFixed(0);
   }
 }
-
-export function titleCase(value: string): string {
-  return value
-    .split(/[\s_-]+/)
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}
