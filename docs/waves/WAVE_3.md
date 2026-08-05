@@ -70,7 +70,7 @@ and stays hidden.
 | `Meeting` entity | `startsAt`/`endsAt`, `kind`, `personIds`, optional `companyId`/`opportunityId`, `location`, `notes`. |
 | `Task.projectId` / `.personId` / `.opportunityId` | The joins that make a task list a work list rather than a to-do list. |
 | `Task.completedAt` | "Done" without a completion time cannot be sorted, undone, or counted into project progress honestly. |
-| `Company.status` | `prospect` / `active` / `dormant` / `churned`. Dexie v3 backfills v2 rows as `active`. |
+| `Company.status` | `prospect` / `active` / `dormant` / `churned`. Dexie v3 backfills v2 rows as `prospect`, the conservative default for a relationship whose lifecycle stage predates the column. |
 | `Person.notes` | Relationship detail had nowhere to record what is actually known about a person. |
 | `Opportunity.personId` / `.leadSource` / `.stageChangedAt` | Champion, where the lead came from, and when the stage last moved — the three facts lead intelligence needs. `leadSource` is deliberately not `source`, which is provenance. |
 | `ActivityEvent.channel` gains `execution` and `relationship` | A task completion is not a pipeline event and not a system event. |
