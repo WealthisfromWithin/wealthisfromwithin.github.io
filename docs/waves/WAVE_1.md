@@ -3,7 +3,7 @@
 **Implementer:** Claude (Implementation Engineer)
 **Plan:** `docs/IMPLEMENTATION_PLAN.md`
 **Architecture:** `ARCHITECTURE_AUDIT.md` §5
-**Status:** complete, awaiting G2 (GPT-5.5 review) and G3 (Grok architecture gate)
+**Status:** complete — G2 APPROVE WITH CHANGES (GPT-5.5), G3 PASS (Grok), pre–Wave 2 fix pack applied
 
 ---
 
@@ -102,8 +102,9 @@ hero, no card spam.
   brief stays legible whenever the surface is opened. `SEED_VERSION` bumps force
   a reseed; the seed also refreshes when older than 12 hours.
 - `src/data/repositories.ts` — `readDataset`, `ensureSeeded`, `seedDemoData`,
-  `clearDemoData`, `resetLocalStore`. Reseeding only deletes rows the seeder
-  owns.
+  `clearDemoData`, `resetLocalStore`, `isDemoOptedOut`. Reseeding only deletes
+  rows the seeder owns, and removing demo rows is a durable operator preference
+  (see fix pack below).
 
 Demo provenance is visible, not implied: the topbar shows a `DEMO` badge with a
 live row count, every seeded row in the brief and palette carries its own badge,
@@ -182,7 +183,7 @@ credentials." There is no cosplay Sentinel green anywhere in the build.
 | `pnpm install` | clean |
 | `pnpm lint` | 0 errors, 0 warnings |
 | `pnpm typecheck` | clean |
-| `pnpm test` | 38 tests, 5 files, passing |
+| `pnpm test` | 46 tests, 6 files, passing |
 | `pnpm build` | success (one chunk-size advisory, see debt) |
 | `pnpm preview` | serves `/`, `/integrations`, `/settings`, `sw.js`, `manifest.webmanifest` |
 
@@ -192,6 +193,44 @@ headings present, nav shows exactly three modules, 26 demo badges on the brief,
 command noise, 27 integration rows in only Disabled / Awaiting Credentials
 states, `/missions` redirects to the brief, and **zero console errors or
 warnings**.
+
+## Fix pack (post G2 / G3, pre–Wave 2)
+
+Scoped to the three items the gates made mandatory or cheap. No Wave 2 module
+work, no new features.
+
+**M1 — durable demo opt-out (mandatory).** "Remove demo rows" is now an operator
+preference rather than a session state. `clearDemoData` writes a `seed.optOut`
+meta flag alongside deleting demo rows, `needsSeed` returns `false` while that
+flag is set (including when the 12-hour staleness timer would otherwise fire),
+and `seedDemoData` clears the flag because asking to refresh demo data is an
+explicit request for it. `resetLocalStore` drops the database, flag included, so
+the store returns to first-run state. Settings shows a live `Demo seed: On /
+Off (opted out)` row and states the durable behaviour in copy, so the control no
+longer promises more than it does — or less. `src/data/repositories.test.ts`
+covers it against a real IndexedDB (`fake-indexeddb`), including a close/reopen
+cycle that stands in for a page reload; the three durability cases fail against
+the pre-fix seeder.
+
+**L1 — provider SDK import boundary.** `no-restricted-imports` grew from two
+package names to a provider list plus scoped-family patterns: OpenAI, Anthropic,
+Google (`@google/generative-ai`, `@google/genai`, Vertex), Mistral, Groq,
+Cohere, Replicate, Together, Ollama, Azure OpenAI, Hugging Face, Bedrock,
+OpenRouter, the Vercel AI SDK (`ai`, `@ai-sdk/*`), LangChain, and LlamaIndex.
+The rule is expressed as an allowlist boundary: nothing may import a provider
+SDK except `src/agents/providers/**`, which does not exist yet and is where the
+first adapter must live; `src/app`, `src/modules`, and `src/ui` additionally may
+not import an adapter at all and must go through the kernel.
+
+**M3 (partial) — production source maps off.** `build.sourcemap: false`. The
+repository is public, so maps offered no debugging value the source does not
+already give, while making the shipped bundle trivially mappable. CSP is
+deliberately **not** in this fix pack: per the G3 gate it lands with
+pre–private-data hardening (Wave 7), and `docs/reports/SECURITY_REPORT.md`
+records that split.
+
+**Not in the fix pack.** M2 (Workbox/offline asset caching) is untouched, so this
+build still must not be described as offline-capable. L2–L5 remain queued debt.
 
 ## Deferrals (intentional, per plan)
 
