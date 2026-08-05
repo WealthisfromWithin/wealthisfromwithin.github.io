@@ -70,6 +70,11 @@ This is the only provider that can run from this bundle, because it is the only
 one that needs no secret. No API key is ever read from the environment: a key in
 `import.meta.env` is a key in the published bundle.
 
+The URL must be loopback — `localhost`, `127.0.0.1`, or `[::1]`. Anything else is
+refused before a request is made, and the adapter reports that no local runtime
+is available. It advertises itself to the kernel as a call that never leaves the
+machine, so it only calls hosts where that is true.
+
 ## Start here
 
 1. [`ARCHITECTURE_AUDIT.md`](./ARCHITECTURE_AUDIT.md) — repository intelligence & recommended architecture

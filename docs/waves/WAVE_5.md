@@ -4,7 +4,7 @@
 **Plan:** `docs/IMPLEMENTATION_PLAN_WAVE_5.md`
 **Architecture:** `ARCHITECTURE_AUDIT.md` §5.6 (Agent Kernel), §7 Wave 5
 **Predecessor:** `docs/waves/WAVE_4.md` (G3 PASS after the M1 fix pack)
-**Status:** complete — awaiting review
+**Status:** complete — G3 H1 fix pack applied, awaiting re-review
 
 ---
 
@@ -123,10 +123,12 @@ even import an adapter path — only `@/agents`.
 `createLocalProvider` is the only adapter that can succeed, because it is the
 only one that needs no secret: the endpoint is a loopback URL, not a credential.
 With no endpoint it reports `unconfigured` and **names the variable that would
-configure it**, and `complete` refuses with `no_provider`. With an endpoint it
-probes `/api/tags` for health and posts to `/api/chat` for a turn, parsing the
-response with zod and refusing `provider_error` on a shape it does not
-recognise. It returns only text the endpoint actually sent.
+configure it**, and `complete` refuses with `no_provider`. With a **loopback**
+endpoint it probes `/api/tags` for health and posts to `/api/chat` for a turn,
+parsing the response with zod and refusing `provider_error` on a shape it does
+not recognise. It returns only text the endpoint actually sent. A non-loopback
+endpoint is refused before a request is built — see the fix pack below, which is
+where that check came from.
 
 The four hosted adapters exist so the roster the AI Workspace prints comes from
 the kernel rather than from a hard-coded list in a component. Each carries the
@@ -316,7 +318,7 @@ moves it.
 |---------|--------|
 | `pnpm lint` | 0 errors, 0 warnings |
 | `pnpm typecheck` | clean |
-| `pnpm test` | **612 tests, 48 files, passing** (Wave 4: 409 / 31) |
+| `pnpm test` | **644 tests, 49 files, passing** (Wave 4: 409 / 31) — 612 / 48 before the fix pack |
 | `pnpm build` | success — 645.71 kB first load + 32 lazy chunks, one chunk-size advisory (TD-16) |
 
 203 tests were added, 191 of them in 17 new files:
@@ -325,11 +327,12 @@ moves it.
   external-call policy block, the kernel overwriting a provider's approval flag,
   fallback to the next adapter, preference ordering, and the most-explanatory
   refusal winning.
-- `src/agents/providers/providers.test.ts` (14) — the local adapter unconfigured,
-  probing, unreachable, returning only text the endpoint sent, and refusing an
-  unrecognised shape; the four hosted adapters reporting
-  `awaiting_credentials` and refusing every completion; default provider order
-  and env parsing.
+- `src/agents/providers/providers.test.ts` (14, then 44 after the fix pack) — the
+  local adapter unconfigured, probing, unreachable, returning only text the
+  endpoint sent, and refusing an unrecognised shape; the four hosted adapters
+  reporting `awaiting_credentials` and refusing every completion; default
+  provider order and env parsing; and the endpoint policy described in the fix
+  pack.
 - `src/data/cognition.mutations.test.ts` (34) — all 23 writers: provenance
   (`source: 'local'`), the event on each channel, decision transitions honoured
   and refused, supersession linking both ways, a finding activating a queued
@@ -426,3 +429,61 @@ suites, which grew to cover the new modules. **Wave 4's content approval sync
    specified. A refusal is the surface talking to the operator, not the operator
    talking to a model, and feeding it back would make the next prompt include
    text about credentials.
+
+## Fix pack — the local endpoint is loopback or it is nothing (G3 H1)
+
+`docs/reviews/WAVE_5_GPT_REVIEW.md` H1 and the G3 gate
+(`docs/reviews/WAVE_5_G3_ALIGNMENT.md`) held the wave on one thing, and it was
+the one place where a claim in this wave was not earned. `createLocalProvider`
+reported `external: false`, and the kernel takes that flag as the whole truth
+about an adapter: it is what allows a turn to run while
+`allowExternalCalls: false`. But the adapter accepted whatever URL
+`VITE_LOCAL_AI_URL` held. A build configured with
+`VITE_LOCAL_AI_URL=https://models.example.com` therefore probed that host, and
+posted the whole session history to it, while the UI printed "Local model" and
+the policy that exists to stop exactly that never saw the call. The policy was
+being decided by an environment file.
+
+The fix is to make the flag true rather than to weaken it. `resolveLocalEndpoint`
+parses the configured value with `URL` and accepts it only when the scheme is
+`http`/`https` and the host is `localhost`, `127.0.0.1`, or `[::1]`. Everything
+else — a remote host, a lookalike such as `localhost.example.com`, a userinfo
+trick such as `http://localhost@example.com`, a LAN address, `0.0.0.0`, a
+`file:`/`ws:`/`javascript:` URL, or a string that is not a URL at all — is
+refused, and refused *before* a request exists: `health` reports `unconfigured`
+and `complete` refuses `no_provider`, with **no `fetch` on either path, not even
+a probe**. Parsing also normalises: the base the adapter appends `/api/tags` and
+`/api/chat` to is rebuilt from the parsed origin and path, so a query string or
+fragment cannot ride along into a request.
+
+LAN and private addresses were considered and left out. They are other machines,
+and reaching one while reporting `external: false` would be the same untrue
+claim in a smaller radius. If a private host is ever needed it has to arrive as
+`external: true` and go through the policy like every other remote provider.
+
+The refusal is phrased for the operator who caused it: it names the host that
+was rejected, says the adapter only calls loopback, and says nothing was sent
+there. It reports `url.host` rather than the configured string, because a
+misconfigured value can carry credentials in its userinfo and that sentence is
+rendered in the UI. The health state stays `unconfigured` — the pill reads *Not
+configured*, the roster summary still reads *No adapter can run a turn*, and the
+composer still offers to record a refusal — so a misconfigured build cannot look
+like a working one.
+
+Thirty-two regressions cover it. `src/agents/providers/providers.test.ts` takes
+the accepted forms (including `http://[0:0:0:0:0:0:0:1]` and an upper-case
+scheme, both of which `URL` normalises) and fifteen refused ones through
+`resolveLocalEndpoint`, asserts that health and completion against a remote
+endpoint leave the injected `fetch` uncalled, and runs the whole default roster
+through the kernel: a loopback endpoint completes under the default policy, a
+remote one refuses with nothing fetched, and it still refuses with nothing
+fetched when `allowExternalCalls: true` — allowing external calls is a statement
+about the hosted adapters, not a reclassification of a remote URL as local.
+`src/modules/ai/AiWorkspacePage.localEndpoint.test.tsx` renders the page with the
+environment variable stubbed to a remote host and asserts the copy names the
+refused host, never says *Ready*, and issues no request.
+
+`kernel.ts` is unchanged apart from the invariant now being written down on
+`ProviderDescriptor.external`: an adapter may declare `false` only if every
+request it can make stays on the loopback interface, whatever its configuration
+says.
