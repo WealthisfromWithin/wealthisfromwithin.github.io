@@ -19,6 +19,11 @@ export const recordBase = z.object({
   source: dataSourceSchema,
   createdAt: isoTimestamp,
   updatedAt: isoTimestamp,
+  /**
+   * Set when the operator authors or mutates a row. The demo seeder preserves
+   * these rows on reseed so a decision is never silently undone.
+   */
+  touchedAt: isoTimestamp.optional(),
 });
 
 export const prioritySchema = z.enum(['critical', 'high', 'normal', 'low']);

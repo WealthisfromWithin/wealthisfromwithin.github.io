@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { fuzzyMatch, rankByFuzzy } from './fuzzy';
 import { buildSearchIndex, searchDocuments } from './index';
+import { enabledModules } from '@/app/modules';
 import { buildDemoDataset } from '@/data/seed';
 
 const now = new Date('2026-08-05T07:30:00.000Z');
@@ -66,8 +67,24 @@ describe('searchDocuments', () => {
     expect(results[0]?.item.demo).toBe(false);
   });
 
+  it('finds a seeded notification and sends it to the inbox', () => {
+    const results = searchDocuments('learning digest', index);
+    const signal = results.find((result) => result.item.kind === 'notification');
+    expect(signal?.item.route).toBe('/inbox');
+    expect(signal?.item.demo).toBe(true);
+  });
+
+  it('finds a seeded approval and sends it to the queue', () => {
+    const results = searchDocuments('re-engagement sequence', index);
+    const approval = results.find((result) => result.item.kind === 'approval');
+    expect(approval?.item.route.startsWith('/approvals')).toBe(true);
+    expect(approval?.item.demo).toBe(true);
+  });
+
   it('never routes to a module that is not built', () => {
-    const routes = new Set(index.map((document) => document.route));
-    expect([...routes].every((route) => route === '/' || route === '/integrations')).toBe(true);
+    const enabled = new Set(enabledModules().map((module) => module.path));
+    for (const document of index) {
+      expect(enabled.has(document.route.split('?')[0] ?? '')).toBe(true);
+    }
   });
 });

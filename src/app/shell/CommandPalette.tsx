@@ -4,6 +4,7 @@ import { CornerDownLeft } from 'lucide-react';
 import { usePalette, useSovereign } from '@/app/context';
 import { buildCommands, commandGroupLabel, type Command } from '@/commands/registry';
 import { db } from '@/data/db';
+import { markAllNotificationsRead } from '@/data/mutations';
 import { resetLocalStore, seedDemoData } from '@/data/repositories';
 import { rankByFuzzy } from '@/search/fuzzy';
 import { searchDocuments, searchKindLabel, type SearchDocument } from '@/search';
@@ -36,6 +37,9 @@ function PaletteDialog() {
         resetStore: async () => {
           await resetLocalStore(db);
           await seedDemoData(db, new Date());
+        },
+        markAllRead: async () => {
+          await markAllNotificationsRead(db);
         },
         openSearch: () => {
           openPalette('search');

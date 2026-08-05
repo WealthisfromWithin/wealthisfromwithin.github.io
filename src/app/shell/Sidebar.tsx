@@ -3,6 +3,8 @@ import { groupLabel, modulesByGroup, type ModuleGroup } from '@/app/modules';
 import { cn } from '@/lib/cn';
 import { useSovereign } from '@/app/context';
 import { deriveSubstrateHealth } from '@/integrations/state';
+import { approvalCounts } from '@/modules/approvals/queue';
+import { unreadCount } from '@/modules/inbox/notifications';
 
 const GROUPS: ModuleGroup[] = ['commander', 'operator'];
 
@@ -31,6 +33,13 @@ function SubstrateLine() {
 }
 
 export function Sidebar() {
+  const { dataset } = useSovereign();
+  /** Counts are read from the store, so a badge never outlives the work it counts. */
+  const badges: Record<string, number> = {
+    inbox: unreadCount(dataset),
+    approvals: approvalCounts(dataset).pending,
+  };
+
   return (
     <nav
       aria-label="Primary"
@@ -65,6 +74,14 @@ export function Sidebar() {
                     >
                       <module.icon className="size-4 shrink-0" strokeWidth={1.5} aria-hidden />
                       <span className="truncate">{module.label}</span>
+                      {(badges[module.id] ?? 0) > 0 ? (
+                        <span
+                          className="ml-auto shrink-0 font-mono text-[0.65rem] text-gold tabular-nums"
+                          title={`${String(badges[module.id])} open`}
+                        >
+                          {badges[module.id]}
+                        </span>
+                      ) : null}
                     </NavLink>
                   </li>
                 ))}

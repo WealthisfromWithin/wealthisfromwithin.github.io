@@ -27,6 +27,8 @@ type DatasetTable = (typeof DATASET_TABLES)[number];
 interface BaseRow {
   id: string;
   source: DataSource;
+  /** Present once the operator authored or mutated the row. */
+  touchedAt?: string;
 }
 
 /** All dataset tables share a primary key and a provenance column. */
@@ -116,9 +118,10 @@ function transactionTables(database: SovereignDb): Table[] {
 }
 
 /**
- * Replaces seeder-owned rows with a fresh dataset. Rows the operator created are
- * left alone: only `demo` rows and ids this seeder owns are cleared. Calling this
- * is an explicit request for demo data, so it also revokes any demo opt-out.
+ * Replaces seeder-owned rows with a fresh dataset. Rows the operator created or
+ * acted on are left alone: only untouched `demo` rows and ids this seeder owns
+ * are cleared, so an approval decision survives a reseed. Calling this is an
+ * explicit request for demo data, so it also revokes any demo opt-out.
  */
 export async function seedDemoData(database: SovereignDb, now: Date): Promise<void> {
   const dataset = buildDemoDataset(now);
@@ -129,13 +132,17 @@ export async function seedDemoData(database: SovereignDb, now: Date): Promise<vo
       const rows = dataset[name] as unknown as BaseRow[];
       const seededIds = new Set(rows.map((row) => row.id));
       const existing = await table.toArray();
+      const preserved = new Set(
+        existing.filter((row) => row.touchedAt !== undefined).map((row) => row.id),
+      );
       const stale = existing
         .filter((row) => row.source === 'demo' || seededIds.has(row.id))
+        .filter((row) => !preserved.has(row.id))
         .map((row) => row.id);
       if (stale.length > 0) {
         await table.bulkDelete(stale);
       }
-      await table.bulkAdd(rows);
+      await table.bulkAdd(rows.filter((row) => !preserved.has(row.id)));
     }
     await writeMeta(database, META_KEYS.seedVersion, SEED_VERSION);
     await writeMeta(database, META_KEYS.seededAt, now.toISOString());

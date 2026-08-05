@@ -1,7 +1,10 @@
 import { Navigate, type RouteObject } from 'react-router-dom';
 import { AppShell } from './shell/AppShell';
 import { enabledModules } from './modules';
+import { ApprovalsPage } from '@/modules/approvals/ApprovalsPage';
 import { MorningBriefPage } from '@/modules/dashboard/MorningBriefPage';
+import { HealthPage } from '@/modules/health/HealthPage';
+import { InboxPage } from '@/modules/inbox/InboxPage';
 import { IntegrationsPage } from '@/modules/integrations/IntegrationsPage';
 import { SettingsPage } from '@/modules/settings/SettingsPage';
 
@@ -12,6 +15,9 @@ import { SettingsPage } from '@/modules/settings/SettingsPage';
  */
 const moduleElements: Record<string, RouteObject['element']> = {
   brief: <MorningBriefPage />,
+  approvals: <ApprovalsPage />,
+  health: <HealthPage />,
+  inbox: <InboxPage />,
   integrations: <IntegrationsPage />,
   settings: <SettingsPage />,
 };

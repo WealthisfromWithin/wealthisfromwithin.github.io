@@ -3,7 +3,7 @@ import { DAY_MS, HOUR_MS } from '@/lib/clock';
 import type { SovereignDataset } from './dataset';
 
 /** Seed contents are versioned so a shape change reseeds the local demo rows. */
-export const SEED_VERSION = 'wave1.1';
+export const SEED_VERSION = 'wave2.0';
 
 const DEMO = 'demo' as const;
 
@@ -206,6 +206,7 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       requestedBy: 'Content loop',
       kind: 'content',
       risk: 'warning',
+      status: 'pending',
       summary: 'Customer-facing copy. WITHIN constitution requires a human gate.',
       dueAt: todayAt(now, 13),
     },
@@ -216,6 +217,7 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       requestedBy: 'Pipeline loop',
       kind: 'outreach',
       risk: 'critical',
+      status: 'pending',
       summary: 'Outbound to dormant contacts. Compliance review required.',
       dueAt: at(now, 1 * DAY_MS),
     },
@@ -226,7 +228,32 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       requestedBy: 'Automation loop',
       kind: 'automation',
       risk: 'info',
+      status: 'pending',
       summary: 'Read-only scoring pass. No customer contact.',
+    },
+    {
+      ...base,
+      id: 'apr-spend',
+      title: 'Renew the transcription seat',
+      requestedBy: 'Operations loop',
+      kind: 'spend',
+      risk: 'info',
+      status: 'approved',
+      summary: '$18/month. Cleared last week; kept here as decided history.',
+      decidedAt: at(now, -5 * DAY_MS),
+      decidedBy: 'Operator',
+    },
+    {
+      ...base,
+      id: 'apr-access',
+      title: 'Grant the research agent read access to the CRM export',
+      requestedBy: 'Research loop',
+      kind: 'access',
+      risk: 'critical',
+      status: 'rejected',
+      summary: 'Refused: no credential vault exists on this surface yet.',
+      decidedAt: at(now, -2 * DAY_MS),
+      decidedBy: 'Operator',
     },
   ];
 
@@ -324,7 +351,7 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       severity: 'critical',
       read: false,
       origin: 'Approval queue',
-      href: '/',
+      href: '/approvals',
     },
     {
       ...base,
@@ -334,7 +361,35 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       severity: 'info',
       read: false,
       origin: 'Pipeline',
-      href: '/',
+    },
+    {
+      ...base,
+      id: 'n-credentials',
+      title: 'Publishing automation cannot run',
+      body: 'The n8n connector is still awaiting credentials, so the loop skips its run.',
+      severity: 'warning',
+      read: false,
+      origin: 'Health monitor',
+      href: '/health',
+    },
+    {
+      ...base,
+      id: 'n-content-review',
+      title: '"The Compounding Constraint" is waiting on a human gate',
+      body: 'Drafted and queued for LinkedIn. Nothing publishes without approval.',
+      severity: 'info',
+      read: false,
+      origin: 'Content loop',
+      href: '/approvals',
+    },
+    {
+      ...base,
+      id: 'n-kestrel',
+      title: 'Kestrel Advisory has been dormant 26 days',
+      body: 'Relationship strength dropped below the re-engagement threshold.',
+      severity: 'info',
+      read: false,
+      origin: 'Relationship watch',
     },
     {
       ...base,
@@ -343,7 +398,19 @@ export function buildDemoDataset(now: Date): SovereignDataset {
       body: 'Content performance summary generated.',
       severity: 'info',
       read: true,
+      readAt: at(now, -18 * HOUR_MS),
       origin: 'Content loop',
+    },
+    {
+      ...base,
+      id: 'n-seed-refresh',
+      title: 'Demo seed refreshed',
+      body: 'Timestamps were rebuilt against the current time so the brief stays legible.',
+      severity: 'info',
+      read: true,
+      readAt: at(now, -30 * HOUR_MS),
+      origin: 'Local store',
+      href: '/settings',
     },
   ];
 

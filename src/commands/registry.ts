@@ -1,8 +1,8 @@
 import type { LucideIcon } from 'lucide-react';
-import { ArrowRight, Database, RefreshCw, Search } from 'lucide-react';
+import { Activity, ArrowRight, CheckCheck, Database, Inbox, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import { enabledModules } from '@/app/modules';
 
-export type CommandGroup = 'navigate' | 'store' | 'surface';
+export type CommandGroup = 'navigate' | 'act' | 'store' | 'surface';
 
 export interface Command {
   id: string;
@@ -16,6 +16,7 @@ export interface Command {
 
 export const commandGroupLabel: Record<CommandGroup, string> = {
   navigate: 'Go to',
+  act: 'Act',
   store: 'Local store',
   surface: 'Surface',
 };
@@ -24,6 +25,7 @@ export interface CommandActions {
   navigate: (path: string) => void;
   reseedDemoData: () => Promise<void>;
   resetStore: () => Promise<void>;
+  markAllRead: () => Promise<void>;
   openSearch: () => void;
 }
 
@@ -43,6 +45,48 @@ export function buildCommands(actions: CommandActions): Command[] {
 
   return [
     ...navigation,
+    {
+      id: 'act:approvals-pending',
+      label: 'Review pending approvals',
+      hint: 'Open the queue filtered to gates still waiting on a decision.',
+      group: 'act',
+      keywords: ['approve', 'reject', 'gate', 'queue'],
+      icon: ShieldCheck,
+      run: () => {
+        actions.navigate('/approvals?status=pending');
+      },
+    },
+    {
+      id: 'act:inbox-unread',
+      label: 'Review unread signals',
+      hint: 'Open the inbox filtered to unread notifications.',
+      group: 'act',
+      keywords: ['inbox', 'unread', 'notifications', 'signals'],
+      icon: Inbox,
+      run: () => {
+        actions.navigate('/inbox?status=unread');
+      },
+    },
+    {
+      id: 'act:mark-all-read',
+      label: 'Mark every signal read',
+      hint: 'Writes read state for all unread notifications in the local store.',
+      group: 'act',
+      keywords: ['inbox', 'clear', 'read', 'notifications'],
+      icon: CheckCheck,
+      run: actions.markAllRead,
+    },
+    {
+      id: 'surface:health',
+      label: 'Check substrate health',
+      hint: 'Registry-derived health. No probe has run, so nothing claims Connected.',
+      group: 'surface',
+      keywords: ['health', 'substrate', 'status', 'logs', 'events'],
+      icon: Activity,
+      run: () => {
+        actions.navigate('/health');
+      },
+    },
     {
       id: 'surface:search',
       label: 'Search records',

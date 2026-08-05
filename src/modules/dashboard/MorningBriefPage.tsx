@@ -5,6 +5,8 @@ import { deriveSubstrateHealth } from '@/integrations/state';
 import { formatCurrencyCents } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { DemoBadge, SectionLabel } from '@/ui/primitives';
+import { approvalCounts } from '@/modules/approvals/queue';
+import { unreadCount } from '@/modules/inbox/notifications';
 import { buildMorningBrief, type BriefItem, type BriefSection, type BriefTone } from './brief';
 
 const toneAccent: Record<BriefTone, string> = {
@@ -66,7 +68,9 @@ function QuestionBlock({ section, index }: { section: BriefSection; index: numbe
           {section.question}
         </h2>
         <span className="ml-auto font-mono text-[0.65rem] text-faint tabular-nums">
-          {section.items.length}
+          {section.total > section.items.length
+            ? `${String(section.items.length)}/${String(section.total)}`
+            : section.items.length}
         </span>
       </header>
       <p className="mb-1 text-xs text-faint">{section.lens}</p>
@@ -96,6 +100,8 @@ export function MorningBriefPage() {
   const blockedCount = brief.sections.find((section) => section.id === 'blocked')?.items.length ?? 0;
   const attentionCount =
     brief.sections.find((section) => section.id === 'attention')?.items.length ?? 0;
+  const unread = unreadCount(dataset);
+  const pendingGates = approvalCounts(dataset).pending;
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-6">
@@ -120,6 +126,22 @@ export function MorningBriefPage() {
             <dd className="font-mono text-lg text-ivory tabular-nums">{attentionCount}</dd>
           </div>
           <div>
+            <dt className="label-caps text-faint">Unread</dt>
+            <dd className="font-mono text-lg text-ivory tabular-nums">
+              <Link to="/inbox" className="hover:text-gold">
+                {unread}
+              </Link>
+            </dd>
+          </div>
+          <div>
+            <dt className="label-caps text-faint">Pending gates</dt>
+            <dd className="font-mono text-lg text-ivory tabular-nums">
+              <Link to="/approvals" className="hover:text-gold">
+                {pendingGates}
+              </Link>
+            </dd>
+          </div>
+          <div>
             <dt className="label-caps text-faint">Blocked</dt>
             <dd className="font-mono text-lg text-ivory tabular-nums">{blockedCount}</dd>
           </div>
@@ -141,7 +163,7 @@ export function MorningBriefPage() {
                     : 'text-faint',
               )}
             >
-              <Link to="/integrations" className="hover:text-ivory">
+              <Link to="/health" className="hover:text-ivory">
                 {health.statement}
               </Link>
             </dd>

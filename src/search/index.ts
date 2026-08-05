@@ -10,7 +10,8 @@ export type SearchKind =
   | 'opportunity'
   | 'content'
   | 'integration'
-  | 'notification';
+  | 'notification'
+  | 'approval';
 
 export interface SearchDocument {
   id: string;
@@ -31,6 +32,7 @@ export const searchKindLabel: Record<SearchKind, string> = {
   content: 'Content',
   integration: 'Integration',
   notification: 'Signal',
+  approval: 'Approval',
 };
 
 /**
@@ -133,10 +135,24 @@ export function buildSearchIndex(dataset: SovereignDataset): SearchDocument[] {
       id: `notification:${notification.id}`,
       kind: 'notification',
       title: notification.title,
-      subtitle: notification.origin,
-      keywords: [notification.body],
-      route: notification.href ?? '/',
+      subtitle: [notification.origin, notification.read ? 'read' : 'unread']
+        .filter(Boolean)
+        .join(' · '),
+      keywords: [notification.body, notification.severity],
+      route: '/inbox',
       demo: notification.source === 'demo',
+    });
+  }
+
+  for (const approval of dataset.approvals) {
+    documents.push({
+      id: `approval:${approval.id}`,
+      kind: 'approval',
+      title: approval.title,
+      subtitle: `${approval.status} · ${approval.kind} · ${approval.risk} risk`,
+      keywords: [approval.summary, approval.requestedBy],
+      route: approval.status === 'pending' ? '/approvals' : '/approvals?status=all',
+      demo: approval.source === 'demo',
     });
   }
 

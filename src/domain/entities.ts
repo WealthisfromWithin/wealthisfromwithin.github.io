@@ -58,13 +58,20 @@ export const missionSchema = recordBase.extend({
 });
 export type Mission = z.infer<typeof missionSchema>;
 
+/** A gate is open, cleared, or refused. There is no "in review" limbo state. */
+export const approvalStatusSchema = z.enum(['pending', 'approved', 'rejected']);
+export type ApprovalStatus = z.infer<typeof approvalStatusSchema>;
+
 export const approvalSchema = recordBase.extend({
   title: z.string().min(1),
   requestedBy: z.string().min(1),
   kind: z.enum(['content', 'outreach', 'automation', 'spend', 'access']),
   risk: severitySchema,
+  status: approvalStatusSchema.default('pending'),
   summary: z.string().default(''),
   dueAt: isoTimestamp.optional(),
+  decidedAt: isoTimestamp.optional(),
+  decidedBy: z.string().optional(),
 });
 export type Approval = z.infer<typeof approvalSchema>;
 
@@ -122,6 +129,7 @@ export const notificationSchema = recordBase.extend({
   body: z.string().default(''),
   severity: severitySchema,
   read: z.boolean(),
+  readAt: isoTimestamp.optional(),
   origin: z.string().default(''),
   href: z.string().optional(),
 });

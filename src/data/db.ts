@@ -48,6 +48,19 @@ export class SovereignDb extends Dexie {
       integrations: 'id, state, category, source',
       meta: 'key',
     });
+
+    // Wave 2 gave approvals a decision status. Rows written by version 1 predate
+    // the column, so they are backfilled as still-open gates.
+    this.version(2)
+      .stores({ approvals: 'id, status, risk, dueAt, source' })
+      .upgrade(async (tx) => {
+        await tx
+          .table<Partial<Approval>, string>('approvals')
+          .toCollection()
+          .modify((row) => {
+            row.status ??= 'pending';
+          });
+      });
   }
 }
 

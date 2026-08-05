@@ -33,6 +33,8 @@ export interface BriefSection {
   question: string;
   lens: string;
   items: BriefItem[];
+  /** Matching rows before the density limit, so truncation is stated, not hidden. */
+  total: number;
   emptyMessage: string;
 }
 
@@ -60,12 +62,13 @@ function attentionSection(dataset: SovereignDataset, now: Date): BriefItem[] {
       meta: notification.origin,
       tone: notification.severity === 'critical' ? 'critical' : 'warning',
       demo: isDemo(notification.source),
-      ...(notification.href ? { href: notification.href } : {}),
+      href: notification.href ?? '/inbox',
     });
   }
 
   for (const approval of dataset.approvals) {
-    if (approval.risk === 'info') continue;
+    // A decided gate is no longer demanding attention, whatever its risk.
+    if (approval.status !== 'pending' || approval.risk === 'info') continue;
     items.push({
       id: `approval:${approval.id}`,
       title: `Approval: ${approval.title}`,
@@ -73,6 +76,7 @@ function attentionSection(dataset: SovereignDataset, now: Date): BriefItem[] {
       meta: `Requested by ${approval.requestedBy}`,
       tone: approval.risk === 'critical' ? 'critical' : 'warning',
       demo: isDemo(approval.source),
+      href: '/approvals',
     });
   }
 
@@ -104,7 +108,7 @@ function attentionSection(dataset: SovereignDataset, now: Date): BriefItem[] {
   }
 
   const toneOrder: Record<BriefTone, number> = { critical: 0, warning: 1, info: 2, neutral: 3 };
-  return items.sort((a, b) => toneOrder[a.tone] - toneOrder[b.tone]).slice(0, SECTION_LIMIT);
+  return items.sort((a, b) => toneOrder[a.tone] - toneOrder[b.tone]);
 }
 
 function opportunitySection(dataset: SovereignDataset): BriefItem[] {
@@ -115,7 +119,6 @@ function opportunitySection(dataset: SovereignDataset): BriefItem[] {
     .sort(
       (a, b) => b.valueCents * b.probability - a.valueCents * a.probability,
     )
-    .slice(0, SECTION_LIMIT)
     .map((opportunity) => ({
       id: `opportunity:${opportunity.id}`,
       title: opportunity.name,
@@ -151,7 +154,6 @@ function todaySection(dataset: SovereignDataset, now: Date): BriefItem[] {
       return (a.dueAt ? Date.parse(a.dueAt) : Number.MAX_SAFE_INTEGER) -
         (b.dueAt ? Date.parse(b.dueAt) : Number.MAX_SAFE_INTEGER);
     })
-    .slice(0, SECTION_LIMIT)
     .map((task) => ({
       id: `task:${task.id}`,
       title: task.title,
@@ -177,7 +179,6 @@ function overnightSection(dataset: SovereignDataset, now: Date): BriefItem[] {
       return !Number.isNaN(at) && at >= since && at <= now.getTime();
     })
     .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
-    .slice(0, SECTION_LIMIT)
     .map((event) => ({
       id: `event:${event.id}`,
       title: event.title,
@@ -227,13 +228,12 @@ function blockedSection(dataset: SovereignDataset): BriefItem[] {
     });
   }
 
-  return items.slice(0, SECTION_LIMIT);
+  return items;
 }
 
 function leverageSection(dataset: SovereignDataset): BriefItem[] {
   return [...dataset.metrics]
     .sort((a, b) => Math.abs(b.deltaPercent) - Math.abs(a.deltaPercent))
-    .slice(0, SECTION_LIMIT)
     .map((metric) => ({
       id: `metric:${metric.id}`,
       title: metric.label,
@@ -250,7 +250,7 @@ function leverageSection(dataset: SovereignDataset): BriefItem[] {
  * repointed at a remote read-model later without touching the UI.
  */
 export function buildMorningBrief(dataset: SovereignDataset, now: Date): MorningBrief {
-  const sections: BriefSection[] = [
+  const sections: BriefSection[] = ([
     {
       id: 'attention',
       question: 'What needs attention?',
@@ -293,7 +293,11 @@ export function buildMorningBrief(dataset: SovereignDataset, now: Date): Morning
       items: leverageSection(dataset),
       emptyMessage: 'No leverage metrics recorded.',
     },
-  ];
+  ] satisfies Omit<BriefSection, 'total'>[]).map((section) => ({
+    ...section,
+    total: section.items.length,
+    items: section.items.slice(0, SECTION_LIMIT),
+  }));
 
   const demoItemCount = sections
     .flatMap((section) => section.items)
