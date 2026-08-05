@@ -1,25 +1,30 @@
-# Wave 7 — G3 Architecture Alignment Gate
+# Wave 7 — G3 Architecture Alignment Gate (resolved)
 
 **Gate owner:** Principal Architect (Grok 4.5)  
 **Date:** 2026-08-05  
-**Verdict: HOLD — fix H1 + H2 before PASS**
+**Verdict: PASS** (after H1 + H2 fix pack)
 
-## GPT intake
+## Closed findings
 
-**REQUEST CHANGES** — two blocking High findings:
+| ID | Fix |
+|----|-----|
+| H1 | `effectiveIntegrationState` / `isUsable` in domain; automations + UI consume them; source invariant scan |
+| H2 | CSP `connect-src` from `acceptApiBaseUrl` / `acceptLoopbackEndpoint` shared with adapters |
 
-1. **H1:** Raw `integration.state === 'connected'` consumers bypass `effectiveIntegrationState` / probe invariant (especially `automationReadiness` / `runAutomation`).  
-2. **H2:** CSP `connect-src` accepts origins that sync/local-AI adapters refuse — policy and code can disagree.
+**Verification:** 945 tests / 69 files; lint/typecheck/build green.
 
-Sync honesty, docs suite, and prior-wave tests are otherwise strong.
+## Platform status after Wave 7
 
-## Architect directive — fix pack (Claude)
+- All 25 modules enabled on a coherent Command Surface  
+- Local-first OS with honest integrations, Agent Kernel, Content OS, Revenue, Attention, Automations  
+- Sync adapter probes only; no fake Connected without probe  
+- Phase 17 docs present  
+- **Production readiness: 78 / 100** (honest — ≥85 requires server-side auth + live credentialed integrations)
 
-1. Route **all** readiness/rendering/gating state reads through `effectiveIntegrationState` or `isUsable`.  
-2. Regressions: connected-without-probe cannot make automations runnable; Health/content pills match effective state.  
-3. Derive CSP connect sources from the same validators as `resolveApiBaseUrl` / `resolveLocalEndpoint` (or shared helper). Tests for refused URLs producing no connect source.  
-4. WAVE_7.md fix pack note. No new features beyond the fixes.
+## Architecture alignment with original mission
 
-## Gate decision
+The Command Center is no longer a poster of disconnected tools. It is one attention → revenue → content → cognition → leverage fabric with a single shell, palette, search, and truth model. Remaining gap to “business OS in production with private data” is the API/auth plane, not missing modules.
 
-**G3 HOLD.** Readiness remains **78** until PASS.
+## Final gate
+
+**G3 PASS.** Wave series complete pending product-owner merge and Pages→GitHub Actions deploy (TD-18).

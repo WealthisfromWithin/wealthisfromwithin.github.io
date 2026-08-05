@@ -28,7 +28,7 @@ same way: a Command API.
 | The product | A 303 kB poster with dead navigation | 177 source files, 25 routed modules, a real local store |
 | Its numbers | Fake health, fake missions, fake pulse | Every figure counted from stored fields, with its basis and sample size |
 | Its integrations | None, plus optimistic greens elsewhere | 29 connectors in three honest states, with `Connected` now enforced rather than described |
-| Its quality gates | None | Four blocking gates; 919 tests across 68 files |
+| Its quality gates | None | Four blocking gates; 945 tests across 69 files |
 | Its documentation | An audit | The audit plus seven Phase 17 documents that match the running system |
 | Readiness | 12 / 100 | 78 / 100 |
 

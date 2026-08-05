@@ -210,3 +210,12 @@ is still an unrecoverable delete. A score of 78 is a good local-first
 single-operator tool with honest instrumentation. It is not a business OS
 holding a business's data, and nothing in this wave moved it closer to being
 one — by design.
+
+
+---
+
+## Wave 7 G3 PASS (Architect)
+
+**Score remains 78 / 100** after H1/H2 security fix pack (945 tests).
+
+Probe invariant is structural (domain `isUsable` + source scan). CSP `connect-src` shares adapter acceptance rules. Score does not jump to ≥85 without server auth and live integrations.
