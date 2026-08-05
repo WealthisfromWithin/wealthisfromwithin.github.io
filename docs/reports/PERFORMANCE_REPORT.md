@@ -12,6 +12,14 @@ All figures below were measured, not estimated. The Wave 6 comparison is a
 the same Vite version, the same Rolldown, and the same machine — a like-for-like
 comparison rather than a figure copied from an older wave note.
 
+**Method.** Raw sizes are `stat` on the emitted files; gzip sizes are `gzip -c |
+wc -c` at the default level. "First load" is the set of chunks referenced by
+`dist/index.html` as either the entry script or a `modulepreload`, which is what
+a browser actually fetches before first paint — not the whole `dist/assets`
+directory. Vite's own build log reports gzip figures 1–2% higher because it
+compresses at a different level; that difference is consistent across both
+columns and does not affect the deltas.
+
 ## Headline
 
 | | Wave 6 (rebuilt) | Wave 7 | Δ |
