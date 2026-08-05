@@ -565,7 +565,7 @@ export function buildDemoDataset(now: Date): SovereignDataset {
     {
       ...base,
       id: 'cmp-compounding',
-      name: 'The Compounding Constraint',
+      name: 'Constraint series',
       objective: 'Turn one essay thesis into a five-part sequence that ends in booked calls.',
       status: 'active',
       startAt: at(now, -21 * DAY_MS),
