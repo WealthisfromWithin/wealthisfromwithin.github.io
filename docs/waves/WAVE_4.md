@@ -4,7 +4,8 @@
 **Plan:** `docs/IMPLEMENTATION_PLAN_WAVE_4.md`
 **Architecture:** `ARCHITECTURE_AUDIT.md` §5.8, §7 Wave 4
 **Predecessor:** `docs/waves/WAVE_3.md` (G3 PASS, fix pack applied)
-**Status:** complete — awaiting G2 review (GPT-5.5) and G3 gate (Grok)
+**Status:** complete — G2 returned REQUEST CHANGES and G3 held on M1; the fix
+pack at the end of this file closes it and awaits the re-gate
 
 ---
 
@@ -153,10 +154,12 @@ is never a sufficient answer for a refused move.
   reseed and no opt-out removes them; promotion creates a linked draft and
   marks the idea `promoted` exactly once.
 
-The three moves that need more than a status — approve, schedule, publish — are
-**refused by `setContentStatus`** with a message naming the writer that can make
-them. That is what keeps the compliance gate un-bypassable: there is no path to
-`approved` that does not run the check.
+The moves that need more than a status — submit, approve, schedule, publish —
+are **refused by `setContentStatus`** with a message naming the writer that can
+make them. That is what keeps the compliance gate un-bypassable: there is no
+path to `approved` that does not run the check, and none to `in_review` that
+does not open a gate. (`submitContentForReview` was added to that guarded list
+by the fix pack below; `rejectContentItem` arrived with it.)
 
 Every writer stamps `touchedAt`, so the 12-hour reseed (TD-17) cannot undo an
 approval. The demo opt-out still wins: `clearDemoData` removes demo content,
@@ -354,3 +357,58 @@ browser.
 7. **Content mutations return `{ ok, reason }`.** The brief did not specify;
    the surfaces need to tell the operator why a move was refused, and a boolean
    cannot.
+
+## Fix pack — content approval sync (G3 M1)
+
+`docs/reviews/WAVE_4_GPT_REVIEW.md` M1 and the G3 gate
+(`docs/reviews/WAVE_4_G3_ALIGNMENT.md`) blocked the wave on one thing: the
+Approval Queue was a second decision surface for content gates, and it was not
+content-aware. `decideApproval` wrote the approval row and stopped, so a
+`kind: 'content'` gate could read *approved* while the copy it held sat in
+`in_review` with no compliance check ever run — and the Brief would go on
+listing that copy as holding an open gate.
+
+The fix routes the decision, not the button. `decideApproval` now takes an
+options bag and returns `{ ok, reason?, compliance? }` like the content writers
+do, and for a content gate it finds the item behind the gate and runs the
+Content OS writers on it:
+
+- **Approve** → `approveContentItem(id, { override })`. Blocking copy refuses
+  the whole decision and hands back the findings; the gate is left pending. The
+  queue then offers the same two ways out the package page offers — *Open the
+  package* to fix the copy, or *Approve anyway (recorded)*, which stamps the
+  override on `complianceSummary` and in the event log.
+- **Reject** → `rejectContentItem(id)`, a new writer paired with the approve
+  path. Refused copy leaves review for `drafting`, because a refused draft is
+  work to be redone rather than work that is waiting, and the gate closes as
+  rejected in the same transaction.
+- **Reopen** → `submitContentForReview(id)`. Reopening a gate has to reopen both
+  halves, so the copy goes back to `in_review` and the gate back to `pending`
+  with its decision stamp cleared.
+
+Two supporting changes make that honest rather than convenient:
+
+- `CONTENT_TRANSITIONS` now allows `approved → in_review`. Without it a reopened
+  gate had nowhere to put the copy, which is the same disagreement in a
+  different place.
+- `setContentStatus` now refuses `in_review` and names
+  `submitContentForReview`, closing the mirror hole — an item in review with no
+  gate behind it.
+
+A refusal never writes half a decision: if the content move cannot be made, the
+gate is left exactly as it was and the queue prints the reason. A content gate
+with no item linked to it is still decided as the plain gate it is.
+
+Regressions cover the path end to end. `src/data/mutations.test.ts` adds a
+suite that approves, rejects, reopens, overrides, and refuses from the queue,
+asserting content status, compliance metadata, gate status and decision stamp,
+the recorded events, survival across a reload and reseed, and — the point of
+M1 — that the Brief's attention section stops claiming an open gate the moment
+the queue decides one, and starts again when it is reopened.
+`src/modules/approvals/ApprovalsPage.test.tsx` clicks the same four paths
+against a real IndexedDB, including the compliance refusal, the package link,
+and the recorded override.
+
+Verification after the fix pack: `pnpm lint` (0/0), `pnpm typecheck` (clean),
+`pnpm test` (**409 tests, 31 files, passing**), `pnpm build` (success). No
+Wave 5 work was touched; L1 (a true Dexie v3→v4 upgrade test) is still open.
