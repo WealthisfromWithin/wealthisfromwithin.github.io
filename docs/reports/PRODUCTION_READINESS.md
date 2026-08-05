@@ -90,3 +90,12 @@ Content OS live with compliance-aware approvals (M1 fixed). Cognition / automati
 **Score: 72 / 100** (was 65 after Wave 4)
 
 Cognition modules + Agent Kernel live; local AI loopback-only (H1 fixed). Automations/MCP/API sync still ahead.
+
+
+---
+
+## Wave 6 update (Architect)
+
+**Score: 78 / 100** (was 72 after Wave 5)
+
+Automations, missions, metrics, analytics, MCP panel live. Sync/auth still ahead for ≥85.
