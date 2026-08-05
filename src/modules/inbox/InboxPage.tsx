@@ -80,7 +80,7 @@ function NotificationRow({ notification, now }: { notification: Notification; no
           }}
           className="label-caps border border-line px-2 py-0.5 text-muted transition-colors hover:border-gold/40 hover:text-ivory"
         >
-          {notification.read ? 'Unread' : 'Read'}
+          {notification.read ? 'Mark unread' : 'Mark read'}
         </button>
       </div>
     </li>

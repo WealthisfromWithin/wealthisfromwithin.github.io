@@ -31,6 +31,9 @@ Debt is dominated by **absence of an application**, not by messy application cod
 | TD-17 | Demo seed refreshes on a 12-hour timer | Low | Wave 7 |
 | TD-18 | Pages source not yet switched to GitHub Actions | Medium | Owner action |
 | TD-19 | Repositories are read-plus-seed; no mutation path | Medium | Wave 2 |
+| TD-20 | Decision events accumulate without a retention rule | Low | Wave 7 |
+| TD-21 | `Operator` is a hard-coded actor on every decision | Low | Wave 7 |
+| TD-22 | No bulk keyboard triage in the inbox or queue | Low | Wave 3–4 |
 
 ## Interest (cost of waiting)
 
@@ -48,3 +51,13 @@ Every day the poster stays live trains the operator to distrust Substrate health
 | TD-10 | **Partly paid.** Health derives from registry truth and honestly reports offline; probes are Wave 2. |
 | TD-11 | **Paid.** Inter replaced by DM Sans; Caslon and JetBrains Mono retained. |
 | TD-14 | **Paid.** `ci.yml` runs lint, typecheck, test, and build on every branch and PR. |
+
+## Wave 2 paydown (`docs/waves/WAVE_2.md`)
+
+| ID | Status after Wave 2 |
+|----|---------------------|
+| TD-19 | **Paid.** `src/data/mutations.ts` is a typed, tested write path: approval decisions and notification read state persist in Dexie. |
+| TD-10 | **Still partly paid.** The Health Monitor ships and is honest, but it projects registry state rather than probing. Closes when the Command API can probe (Wave 7). |
+| TD-03 | **Held.** Wave 2 added three surfaces and no fake telemetry; health still reports `offline` and the log shows recorded events only. |
+| TD-17 | **Reduced.** Rows the operator acted on carry `touchedAt` and survive the 12-hour reseed, so a demo refresh can no longer reopen a decided gate. Demo timestamps still move. |
+| TD-16 | **Unchanged.** One chunk, now ~534 KB raw / ~163 KB gzip. Route splitting stays queued for Waves 3–4. |
