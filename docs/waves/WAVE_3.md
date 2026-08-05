@@ -313,3 +313,28 @@ deep-link check Wave 2 ran by hand.
 6. **Wave 2's pages were lazy-loaded too.** The brief asked for splitting on new
    modules; splitting only half the routes would have left the win on the table
    for no gain in safety.
+
+## Fix pack (hygiene — G3 alignment)
+
+`docs/reviews/WAVE_3_GPT_REVIEW.md` L1/L2 and the G3 gate
+(`docs/reviews/WAVE_3_G3_ALIGNMENT.md`) required closing two small gaps before
+Wave 4:
+
+- **L1 — company backfill default.** The *Domain and data* table above said
+  Dexie v3 backfills v2 companies as `active`; the migration itself (and its
+  own code comment) has always written `prospect`. The doc was wrong, not the
+  code — `prospect` is the conservative default for a relationship whose
+  lifecycle stage predates the column. The table and this file's mutation
+  summary now say `prospect`.
+- **L2 — `blockedReason` outlived `blocked`.** `setTaskStatus` cleared
+  `blockedSince` on the way out of `blocked` but left `blockedReason` in
+  place, so a task moved back to `in_progress` still showed its old blocker
+  everywhere `blockedReason` renders (task rows, the brief, search).
+  `src/data/mutations.ts` now clears `blockedReason` alongside `blockedSince`
+  whenever the new status is not `blocked`. `src/data/mutations.test.ts`
+  covers it: `t-publish-loop` has a seeded `blockedReason`, and moving it to
+  `in_progress` asserts both fields are gone.
+- No Wave 4 feature work was touched; this is the fix pack only.
+
+Verification after the fix pack: `pnpm lint && pnpm typecheck && pnpm test &&
+pnpm build`.
