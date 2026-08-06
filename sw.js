@@ -1,19 +1,6 @@
-// Offline shell for Sovereign Command. Bump CACHE on each deploy.
-const CACHE = 'sovereign-v1';
-const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
-});
+// No-op service worker: the site now redirects to sovereignmind.online.
+// Deletes any previously cached HermesBrain shell so stale content is never served.
+self.addEventListener('install', e => { self.skipWaiting(); });
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
-});
-self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
-  e.respondWith(
-    fetch(e.request).then(r => {
-      const copy = r.clone();
-      caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
-      return r;
-    }).catch(() => caches.match(e.request).then(m => m || caches.match('./index.html')))
-  );
+  e.waitUntil(caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
